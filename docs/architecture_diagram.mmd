@@ -1,0 +1,51 @@
+flowchart TB
+    subgraph Client["Flutter App (iOS/Android/Web)"]
+        UI["UI Layer"]
+        BLoC["Business Logic (BLoC)"]
+        Repo["Repository Layer"]
+    end
+
+    subgraph AWS["AWS Cloud"]
+        subgraph Auth["Authentication"]
+            Cognito["Cognito User Pool"]
+            AuthLambda["Auth Lambda"]
+        end
+
+        subgraph API["API Layer"]
+            APIGW["API Gateway"]
+            UserSvc["User Service"]
+            TradeSvc["Trade Service"]
+            PaymentSvc["Payment Service"]
+            KYCSvc["KYC Service"]
+            NotifSvc["Notification Service"]
+        end
+
+        subgraph Data["Data Layer"]
+            DynamoDB["DynamoDB"]
+            Aurora["Aurora Serverless"]
+            S3["S3 (KYC Docs)"]
+        end
+
+        subgraph External["Event Processing"]
+            SQS["SQS Queues"]
+            EventBridge["EventBridge"]
+            StepFn["Step Functions"]
+        end
+    end
+
+    subgraph ThirdParty["Third-Party Services"]
+        DriveWealth["DriveWealth API"]
+        Paystack["Paystack"]
+        Flutterwave["Flutterwave"]
+        Twilio["Twilio (SMS)"]
+    end
+
+    Client --> APIGW
+    Client --> Cognito
+    APIGW --> UserSvc & TradeSvc & PaymentSvc & KYCSvc
+    TradeSvc --> DriveWealth
+    PaymentSvc --> Paystack & Flutterwave
+    KYCSvc --> S3
+    NotifSvc --> Twilio
+    UserSvc & TradeSvc --> DynamoDB & Aurora
+    SQS --> NotifSvc

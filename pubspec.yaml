@@ -1,0 +1,128 @@
+name: thryve
+description: "Invest in US Stocks from Africa"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Icons
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  
+  # State Management
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+  
+  # Navigation
+  go_router: ^14.6.2
+  
+  # Dependency Injection
+  get_it: ^8.0.2
+  injectable: ^2.5.0
+  
+  # Networking
+  dio: ^5.7.0
+  retrofit: ^4.4.1
+  pretty_dio_logger: ^1.4.0
+  connectivity_plus: ^6.1.0
+  
+  # Local Storage
+  flutter_secure_storage: ^9.2.2
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.3
+  
+  # Authentication & Security
+  local_auth: ^2.3.0
+  
+  # Firebase (Push Notifications)
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+  
+  # Charts & Graphs
+  fl_chart: ^0.69.2
+  
+  # Image & Camera (for KYC)
+  image_picker: ^1.1.2
+  camera: ^0.11.0+2
+  
+  # Forms & Validation
+  flutter_form_builder: ^10.2.0
+  form_builder_validators: ^11.0.0
+  
+  # Utilities
+  url_launcher: ^6.3.1
+  permission_handler: ^11.3.1
+  logger: ^2.5.0
+  uuid: ^4.5.1
+  
+  # JSON Serialization
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.4
+  http: ^1.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  
+  # Code Generation
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  injectable_generator: ^2.6.2
+  retrofit_generator: ^9.1.5
+  
+  # Testing
+  bloc_test: ^9.1.7
+  mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+  
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+# App icon configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/thryve_icon.png"
+  adaptive_icon_background: "#f37021"
+  adaptive_icon_foreground: "assets/images/thryve_icon.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/images/thryve_icon.png"
+    background_color: "#f37021"
+    theme_color: "#f37021"
+  windows:
+    generate: true
+    image_path: "assets/images/thryve_icon.png"
+  macos:
+    generate: true
+    image_path: "assets/images/thryve_icon.png"
