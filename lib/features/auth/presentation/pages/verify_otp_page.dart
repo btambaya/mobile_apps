@@ -1,20 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 
-/// OTP verification page for email/phone verification
+/// OTP verification page for Cognito email verification
 class VerifyOtpPage extends StatefulWidget {
   final String? email;
-  final String? phone;
 
   const VerifyOtpPage({
     super.key,
     this.email,
-    this.phone,
   });
 
   @override
@@ -31,15 +33,26 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     (_) => FocusNode(),
   );
 
-  bool _isLoading = false;
   bool _canResend = false;
   int _resendCountdown = 60;
   Timer? _timer;
+  String? _email;
 
   @override
   void initState() {
     super.initState();
+    _email = widget.email;
     _startResendTimer();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Get email from route extra if not provided
+    if (_email == null) {
+      final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
+      _email = extra?['email'] as String?;
+    }
   }
 
   @override
@@ -79,11 +92,11 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     
     // Auto-submit when all digits are entered
     if (_otp.length == 6) {
-      _verifyOtp();
+      _verifyOtp(context);
     }
   }
 
-  void _verifyOtp() {
+  void _verifyOtp(BuildContext blocContext) {
     if (_otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -94,185 +107,203 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       return;
     }
 
-    setState(() => _isLoading = true);
-    // TODO: Implement actual OTP verification
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        // Navigate to KYC flow after verification
-        context.go(AppRoutes.kycStart);
-      }
-    });
-  }
+    if (_email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email not found. Please try again.'),
+          backgroundColor: ThryveColors.error,
+        ),
+      );
+      return;
+    }
 
-  void _resendOtp() {
-    if (!_canResend) return;
-    
-    // TODO: Implement actual resend logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Verification code sent!'),
-        backgroundColor: ThryveColors.success,
+    blocContext.read<AuthBloc>().add(
+      AuthConfirmSignUpRequested(
+        email: _email!,
+        code: _otp,
       ),
     );
+  }
+
+  void _resendOtp(BuildContext blocContext) {
+    if (!_canResend || _email == null) return;
+    
+    blocContext.read<AuthBloc>().add(AuthResendCodeRequested(_email!));
     _startResendTimer();
+  }
+
+  void _clearCode() {
+    for (var controller in _controllers) {
+      controller.clear();
+    }
+    _focusNodes[0].requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
-          ),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24),
+    return BlocProvider(
+      create: (_) => AuthBloc(),
+      child: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthConfirmSignUpSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Email verified! Please sign in.'),
+                backgroundColor: ThryveColors.success,
+              ),
+            );
+            // Navigate to login
+            context.go(AppRoutes.login);
+          } else if (state is AuthCodeResent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Verification code sent!'),
+                backgroundColor: ThryveColors.success,
+              ),
+            );
+          } else if (state is AuthError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: ThryveColors.error,
+              ),
+            );
+            _clearCode();
+          }
+        },
+        builder: (context, state) {
+          final isLoading = state is AuthLoading;
 
-              // Header
-              _buildHeader(isDark),
+          return Scaffold(
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                ),
+                onPressed: isLoading ? null : () => context.pop(),
+              ),
+            ),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 24),
 
-              const SizedBox(height: 48),
+                    // Header
+                    _buildHeader(isDark),
 
-              // OTP input fields
-              _buildOtpFields(isDark),
+                    const SizedBox(height: 48),
 
-              const SizedBox(height: 32),
+                    // OTP input fields
+                    _buildOtpFields(context, isDark, isLoading),
 
-              // Verify button
-              _buildVerifyButton(),
+                    const SizedBox(height: 32),
 
-              const SizedBox(height: 24),
+                    // Verify button
+                    _buildVerifyButton(context, isLoading),
 
-              // Resend link
-              _buildResendLink(),
+                    const SizedBox(height: 24),
 
-              const Spacer(),
+                    // Resend option
+                    _buildResendOption(context, isLoading),
 
-              // Help text
-              _buildHelpText(),
+                    const Spacer(),
 
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
+                    // Help text
+                    _buildHelpText(isDark),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader(bool isDark) {
-    final destination = widget.email ?? widget.phone ?? 'your email';
-
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Icon
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: ThryveColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(
-            Icons.mark_email_read_outlined,
-            size: 40,
-            color: ThryveColors.accent,
-          ),
-        ),
-        const SizedBox(height: 24),
         Text(
-          'Verify Your Email',
+          'Verify Email',
           style: ThryveTypography.headlineLarge.copyWith(
             color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Text(
-          'We sent a 6-digit code to',
+          'Enter the 6-digit code sent to',
           style: ThryveTypography.bodyLarge.copyWith(
             color: ThryveColors.textSecondary,
           ),
-          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 4),
         Text(
-          destination,
-          style: ThryveTypography.titleMedium.copyWith(
-            color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+          _email ?? 'your email',
+          style: ThryveTypography.bodyLarge.copyWith(
+            color: ThryveColors.accent,
+            fontWeight: FontWeight.w600,
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Widget _buildOtpFields(bool isDark) {
+  Widget _buildOtpFields(BuildContext blocContext, bool isDark, bool isLoading) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(6, (index) {
-        return Container(
-          width: 48,
-          height: 56,
-          margin: EdgeInsets.only(left: index > 0 ? 8 : 0),
-          child: TextFormField(
+        return SizedBox(
+          width: 50,
+          height: 60,
+          child: TextField(
             controller: _controllers[index],
             focusNode: _focusNodes[index],
-            keyboardType: TextInputType.number,
+            enabled: !isLoading,
             textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
             maxLength: 1,
-            style: ThryveTypography.headlineMedium.copyWith(
+            style: ThryveTypography.headlineSmall.copyWith(
               color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
             ),
             decoration: InputDecoration(
               counterText: '',
               filled: true,
               fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
-              contentPadding: EdgeInsets.zero,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: ThryveColors.accent,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: ThryveColors.accent, width: 2),
               ),
             ),
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
             ],
             onChanged: (value) => _handleOtpInput(value, index),
-            onEditingComplete: () {
-              if (index < 5) {
-                _focusNodes[index + 1].requestFocus();
-              }
-            },
           ),
         );
       }),
     );
   }
 
-  Widget _buildVerifyButton() {
+  Widget _buildVerifyButton(BuildContext blocContext, bool isLoading) {
     return SizedBox(
       height: 56,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _verifyOtp,
+        onPressed: isLoading ? null : () => _verifyOtp(blocContext),
         style: ElevatedButton.styleFrom(
           backgroundColor: ThryveColors.accent,
           foregroundColor: Colors.white,
@@ -281,7 +312,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
           ),
           elevation: 0,
         ),
-        child: _isLoading
+        child: isLoading
             ? const SizedBox(
                 width: 24,
                 height: 24,
@@ -301,47 +332,57 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     );
   }
 
-  Widget _buildResendLink() {
-    return Center(
-      child: _canResend
-          ? TextButton(
-              onPressed: _resendOtp,
-              child: Text(
-                'Resend Code',
-                style: ThryveTypography.labelLarge.copyWith(
-                  color: ThryveColors.accent,
-                ),
-              ),
-            )
-          : Text(
-              'Resend code in ${_resendCountdown}s',
-              style: ThryveTypography.bodyMedium.copyWith(
-                color: ThryveColors.textSecondary,
+  Widget _buildResendOption(BuildContext blocContext, bool isLoading) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          "Didn't receive the code? ",
+          style: ThryveTypography.bodyMedium.copyWith(
+            color: ThryveColors.textSecondary,
+          ),
+        ),
+        if (_canResend)
+          TextButton(
+            onPressed: isLoading ? null : () => _resendOtp(blocContext),
+            child: Text(
+              'Resend',
+              style: ThryveTypography.labelLarge.copyWith(
+                color: ThryveColors.accent,
               ),
             ),
+          )
+        else
+          Text(
+            'Resend in ${_resendCountdown}s',
+            style: ThryveTypography.labelLarge.copyWith(
+              color: ThryveColors.textTertiary,
+            ),
+          ),
+      ],
     );
   }
 
-  Widget _buildHelpText() {
+  Widget _buildHelpText(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: ThryveColors.info.withValues(alpha: 0.1),
+        color: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.info_outline,
-            color: ThryveColors.info,
+            color: ThryveColors.accent,
             size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "Can't find the email? Check your spam folder.",
+              'Check your spam folder if you don\'t see the email',
               style: ThryveTypography.bodySmall.copyWith(
-                color: ThryveColors.info,
+                color: ThryveColors.textSecondary,
               ),
             ),
           ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/user_profile_service.dart';
+import '../../domain/entities/user_profile.dart';
 
 /// Edit profile page - Update user information
 class EditProfilePage extends StatefulWidget {
@@ -13,11 +15,57 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController(text: 'John');
-  final _lastNameController = TextEditingController(text: 'Doe');
-  final _emailController = TextEditingController(text: 'john.doe@email.com');
-  final _phoneController = TextEditingController(text: '8012345678');
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final UserProfileService _profileService = UserProfileService();
+  
+  UserProfile? _profile;
   bool _isLoading = false;
+  bool _isLoadingProfile = true;
+  
+  /// Check if profile is locked (KYC complete)
+  bool get _isProfileLocked => _profile?.isKycComplete ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    // Check cache first (instant!)
+    if (_profileService.hasCache) {
+      _populateFields(_profileService.cachedProfile!);
+      return;
+    }
+
+    // Fetch from service
+    try {
+      final profile = await _profileService.getProfile();
+      if (mounted) {
+        _populateFields(profile);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingProfile = false);
+      }
+    }
+  }
+
+  void _populateFields(UserProfile profile) {
+    setState(() {
+      _profile = profile;
+      _firstNameController.text = profile.givenName ?? '';
+      _lastNameController.text = profile.familyName ?? '';
+      _emailController.text = profile.email;
+      // Remove country code prefix if present
+      final phone = profile.phoneNumber ?? '';
+      _phoneController.text = phone.replaceFirst('+234', '').replaceFirst('+', '');
+      _isLoadingProfile = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -28,10 +76,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  void _handleSave() {
+  void _handleSave() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _isLoading = true);
-      Future.delayed(const Duration(seconds: 1), () {
+      
+      try {
+        // TODO: Call API to update profile
+        await Future.delayed(const Duration(seconds: 1));
+        
         if (mounted) {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -42,7 +94,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
           );
           context.pop();
         }
-      });
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update profile: $e'),
+              backgroundColor: ThryveColors.error,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -138,7 +200,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: _isLoadingProfile
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
@@ -160,7 +224,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       ),
                       child: Center(
                         child: Text(
-                          'JD',
+                          _profile?.initials ?? 'U',
                           style: ThryveTypography.displaySmall.copyWith(
                             color: Colors.white,
                           ),
@@ -194,12 +258,39 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 24),
 
+              // KYC Locked notice
+              if (_isProfileLocked) ...[                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: ThryveColors.info.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: ThryveColors.info.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline, color: ThryveColors.info),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Your profile is locked after identity verification. Only your profile photo can be changed.',
+                          style: ThryveTypography.bodySmall.copyWith(
+                            color: ThryveColors.info,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               // Form fields
               _buildTextField(
                 controller: _firstNameController,
                 label: 'First Name',
                 icon: Icons.person_outline,
                 isDark: isDark,
+                enabled: !_isProfileLocked,
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -207,6 +298,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 label: 'Last Name',
                 icon: Icons.person_outline,
                 isDark: isDark,
+                enabled: !_isProfileLocked,
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -214,7 +306,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 label: 'Email',
                 icon: Icons.email_outlined,
                 isDark: isDark,
-                enabled: false,
+                enabled: false, // Email is always locked
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -224,21 +316,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 prefixText: '+234 ',
                 isDark: isDark,
                 keyboardType: TextInputType.phone,
+                enabled: !_isProfileLocked,
               ),
               const SizedBox(height: 32),
 
-              // Save button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ThryveColors.accent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              // Save button (only shown if profile is editable)
+              if (!_isProfileLocked)
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleSave,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ThryveColors.accent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                  ),
                   child: _isLoading
                       ? const SizedBox(
                           width: 24,

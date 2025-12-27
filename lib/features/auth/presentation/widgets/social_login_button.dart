@@ -6,27 +6,29 @@ import '../../../../app/theme/typography.dart';
 class SocialLoginButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final bool isDark;
 
   const SocialLoginButton({
     super.key,
     required this.icon,
     required this.label,
-    required this.onPressed,
+    this.onPressed,
+    this.isDark = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final darkMode = isDark || Theme.of(context).brightness == Brightness.dark;
 
     return SizedBox(
       height: 56,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          backgroundColor: isDark ? ThryveColors.surfaceDark : Colors.white,
+          backgroundColor: darkMode ? ThryveColors.surfaceDark : Colors.white,
           side: BorderSide(
-            color: isDark ? ThryveColors.surfaceElevatedDark : ThryveColors.divider,
+            color: darkMode ? ThryveColors.surfaceElevatedDark : ThryveColors.divider,
             width: 1.5,
           ),
           shape: RoundedRectangleBorder(
@@ -40,13 +42,13 @@ class SocialLoginButton extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+              color: darkMode ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
             ),
             const SizedBox(width: 8),
             Text(
               label,
               style: ThryveTypography.labelLarge.copyWith(
-                color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                color: darkMode ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
               ),
             ),
           ],

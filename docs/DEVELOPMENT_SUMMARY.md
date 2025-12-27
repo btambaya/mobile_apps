@@ -78,9 +78,9 @@ Thryve is a mobile investment app that allows Nigerian users to invest in US sto
 
 ## Session Summary
 
-### Date: December 26, 2024
+### Date: December 26-27, 2024
 
-### Objectives Completed
+### Objectives Completed (Dec 26)
 1. ✅ Research DriveWealth API requirements for user onboarding
 2. ✅ Create gap analysis comparing existing UI to DriveWealth needs
 3. ✅ Build missing KYC screens for DriveWealth compliance
@@ -89,11 +89,35 @@ Thryve is a mobile investment app that allows Nigerian users to invest in US sto
 6. ✅ Fix Flutter analyze warnings and verify build
 7. ✅ Create comprehensive documentation
 
+### Objectives Completed (Dec 27 - Morning)
+8. ✅ Add Auto-Invest feature (D/W/M/Y scheduling)
+9. ✅ Add Portfolio chart toggle (line/pie charts)
+10. ✅ Update logo and app icons
+
+### Objectives Completed (Dec 27 - Evening Session)
+11. ✅ **User Profile API Integration** - Full AWS API Gateway + Lambda + DynamoDB setup
+12. ✅ **Profile Page** - Now displays real user data from DynamoDB
+13. ✅ **Edit Profile Page** - Loads real data, KYC locking implemented
+14. ✅ **Notifications Page** - Actionable items for phone verification and KYC
+15. ✅ **UserProfileService** - Singleton with permanent caching for fast page loads
+16. ✅ **Home Page** - Fixed notification bell navigation
+17. ✅ **Security Cleanup** - Removed all debug print statements from production code
+18. ✅ **API Documentation** - Complete guide for User Profile API
+
+### AWS Infrastructure Configured
+- **API Gateway:** `https://y1mheifune.execute-api.us-east-1.amazonaws.com/prod`
+- **Lambda Functions:**
+  - `thryve-get-user-profile` - Fetches user data from DynamoDB
+  - `thryve-post-confirmation` - Creates user in DynamoDB on signup
+- **DynamoDB Table:** `thryve-users` - Stores extended user profiles
+- **Cognito:** User Pool with Post Confirmation Lambda trigger
+
 ### Metrics
-- **New Screens Created:** 5
-- **Screens Modified:** 3
+- **New Screens Created:** 6
+- **Screens Modified:** 8
 - **New Widget Components:** 9
-- **Total App Screens:** 35+
+- **New Services Created:** 2 (ApiService, UserProfileService)
+- **Total App Screens:** 37+
 - **Build Status:** Passing ✅
 
 ---
@@ -466,6 +490,88 @@ static const String documents = '/documents';
 
 ---
 
+### Task 13: Create Auto-Invest Feature (Dec 27)
+**Objective:** Allow users to schedule recurring investments on D/W/M/Y basis
+
+**What Was Done:**
+- Created new auto-invest page with full scheduling UI
+- Implemented frequency selector (Daily, Weekly, Monthly, Yearly)
+- Added stock picker from watchlist/portfolio
+- Day picker for weekly (Mon-Fri) and monthly (1,5,10,15,20,25)
+- Active auto-invest cards with status and next date
+- Benefits section explaining dollar-cost averaging
+
+**Implementation Details:**
+```dart
+// Frequency options displayed as D, W, M, Y buttons
+['Daily', 'Weekly', 'Monthly', 'Yearly']
+
+// Auto-invest model structure
+{
+  'symbol': 'AAPL',
+  'amount': 100.0,
+  'frequency': 'Weekly',
+  'nextDate': 'Mon, Dec 30',
+  'isActive': true,
+}
+```
+
+**Files Created:**
+- `lib/features/portfolio/presentation/pages/auto_invest_page.dart` (580 lines)
+
+---
+
+### Task 14: Add Portfolio Chart Toggle (Dec 27)
+**Objective:** Add line/pie chart toggle to show portfolio allocation vs growth
+
+**What Was Done:**
+- Added toggle button (line chart / pie chart icons)
+- Line chart shows portfolio growth over time with period selector
+- Pie chart shows allocation by stock with color-coded legend
+- Holdings list now color-coded to match pie chart
+- Activity tab includes auto-invest transactions
+- Auto-invest button added to app bar
+
+**Implementation Details:**
+```dart
+// Chart toggle state
+bool _showPieChart = false;
+
+// Holdings with colors for pie chart
+final List<Map<String, dynamic>> _holdings = [
+  {'symbol': 'AAPL', 'value': 933.20, 'color': Color(0xFF555555)},
+  {'symbol': 'NVDA', 'value': 981.33, 'color': Color(0xFF76B900)},
+  // ...
+];
+```
+
+**Files Modified:**
+- `lib/features/portfolio/presentation/pages/portfolio_page.dart` (completely rewritten, 510 lines)
+
+---
+
+### Task 15: Update Logo and App Icons (Dec 27)
+**Objective:** Replace placeholder logos with actual Thryve branding
+
+**What Was Done:**
+- Added Thryve leaf icon to assets folder
+- Added Thryve wordmark logo to assets folder
+- Updated splash page to show leaf icon
+- Updated login page to show leaf icon
+- Generated app icons for iOS, Android, and Web
+- Configured flutter_launcher_icons package
+
+**Files Added:**
+- `assets/images/thryve_icon.png` - Orange leaf icon
+- `assets/images/thryve_logo.png` - Full wordmark
+
+**Files Modified:**
+- `lib/features/auth/presentation/pages/splash_page.dart`
+- `lib/features/auth/presentation/pages/login_page.dart`
+- `pubspec.yaml` (flutter_launcher_icons config)
+
+---
+
 ## Architecture Decisions
 
 ### Why Flutter?
@@ -545,7 +651,8 @@ lib/
 │   │   └── presentation/
 │   │       └── pages/
 │   │           ├── home_page.dart
-│   │           └── portfolio_page.dart
+│   │           ├── portfolio_page.dart         # Modified (Dec 27)
+│   │           └── auto_invest_page.dart       # NEW (Dec 27)
 │   │
 │   ├── trading/
 │   │   ├── data/

@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/biometric_auth_service.dart';
+import '../../../auth/data/repositories/auth_repository_impl.dart';
 
 /// Settings page - App preferences and configuration
 class SettingsPage extends StatefulWidget {
@@ -14,11 +16,51 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _biometricEnabled = true;
+  final BiometricAuthService _biometricService = BiometricAuthService();
+  
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
+  String _biometricTypeName = 'Biometric';
   bool _pushNotifications = true;
   bool _emailNotifications = true;
   bool _smsNotifications = false;
   bool _darkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricSettings();
+  }
+
+  Future<void> _loadBiometricSettings() async {
+    final available = await _biometricService.canAuthenticate();
+    final enabled = await _biometricService.isBiometricEnabled();
+    final typeName = await _biometricService.getBiometricTypeName();
+    
+    if (mounted) {
+      setState(() {
+        _biometricAvailable = available;
+        _biometricEnabled = enabled && available;
+        _biometricTypeName = typeName;
+      });
+    }
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      // Authenticate first before enabling
+      final success = await _biometricService.authenticate(
+        reason: 'Verify your identity to enable $_biometricTypeName login',
+      );
+      if (success) {
+        await _biometricService.setBiometricEnabled(true);
+        setState(() => _biometricEnabled = true);
+      }
+    } else {
+      await _biometricService.setBiometricEnabled(false);
+      setState(() => _biometricEnabled = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,11 +94,13 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSectionTitle('Security', isDark),
             _buildSettingsCard(isDark, [
               _buildSwitchTile(
-                title: 'Biometric Login',
-                subtitle: 'Use Face ID or fingerprint to log in',
+                title: '$_biometricTypeName Login',
+                subtitle: _biometricAvailable 
+                    ? 'Use $_biometricTypeName to log in'
+                    : 'Biometric not available on this device',
                 icon: Icons.fingerprint,
                 value: _biometricEnabled,
-                onChanged: (value) => setState(() => _biometricEnabled = value),
+                onChanged: _biometricAvailable ? _toggleBiometric : null,
               ),
               _buildTileDivider(isDark),
               _buildNavigationTile(
@@ -138,6 +182,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ]),
             const SizedBox(height: 32),
 
+            // Sign Out
+            _buildSignOutButton(isDark),
+            const SizedBox(height: 24),
+
             // Danger zone
             _buildSectionTitle('Danger Zone', isDark),
             _buildSettingsCard(isDark, [
@@ -193,7 +241,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required String subtitle,
     required IconData icon,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    ValueChanged<bool>? onChanged,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -460,6 +508,65 @@ class _SettingsPageState extends State<SettingsPage> {
             },
             child: Text(
               'Delete',
+              style: TextStyle(color: ThryveColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignOutButton(bool isDark) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: OutlinedButton.icon(
+        onPressed: () => _showSignOutDialog(),
+        icon: const Icon(Icons.logout, color: ThryveColors.error),
+        label: Text(
+          'Sign Out',
+          style: ThryveTypography.button.copyWith(
+            color: ThryveColors.error,
+            fontSize: 16,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: ThryveColors.error, width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSignOutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: ThryveColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Sign out via AuthRepository
+              final authRepo = AuthRepositoryImpl();
+              await authRepo.signOut();
+              // Navigate to onboarding
+              if (mounted) {
+                context.go(AppRoutes.onboarding);
+              }
+            },
+            child: Text(
+              'Sign Out',
               style: TextStyle(color: ThryveColors.error),
             ),
           ),

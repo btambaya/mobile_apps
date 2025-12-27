@@ -73,34 +73,37 @@ class HomePage extends StatelessWidget {
             ),
           ),
           // Notification bell
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Icon(
-                    Icons.notifications_outlined,
-                    color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
-                  ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: ThryveColors.error,
-                      shape: BoxShape.circle,
+          GestureDetector(
+            onTap: () => context.push(AppRoutes.notifications),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Icon(
+                      Icons.notifications_outlined,
+                      color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
                     ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: ThryveColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/social_login_button.dart';
 
-/// Login page with email/password authentication
+/// Login page with email/password authentication via AWS Cognito
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -20,7 +24,6 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,16 +32,14 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin(BuildContext blocContext) {
     if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
-      // TODO: Implement actual login logic
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          context.go(AppRoutes.home);
-        }
-      });
+      blocContext.read<AuthBloc>().add(
+        AuthSignInRequested(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        ),
+      );
     }
   }
 
@@ -47,113 +48,139 @@ class _LoginPageState extends State<LoginPage> {
     final size = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: size.height * 0.08),
+    return BlocProvider(
+      create: (_) => AuthBloc(),
+      child: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthAuthenticated) {
+            // Check KYC status and navigate accordingly
+            context.go(AppRoutes.home);
+          } else if (state is AuthError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: ThryveColors.error,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          final isLoading = state is AuthLoading;
 
-                // Logo and welcome text
-                _buildHeader(isDark),
+          return Scaffold(
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: size.height * 0.08),
 
-                const SizedBox(height: 48),
+                      // Logo and welcome text
+                      _buildHeader(isDark),
 
-                // Email field
-                AuthTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  hint: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value)) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
+                      const SizedBox(height: 48),
 
-                const SizedBox(height: 16),
-
-                // Password field
-                AuthTextField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  hint: 'Enter your password',
-                  obscureText: _obscurePassword,
-                  prefixIcon: Icons.lock_outline,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: ThryveColors.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 8) {
-                      return 'Password must be at least 8 characters';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 12),
-
-                // Forgot password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => context.push(AppRoutes.forgotPassword),
-                    child: Text(
-                      'Forgot Password?',
-                      style: ThryveTypography.labelLarge.copyWith(
-                        color: ThryveColors.accent,
+                      // Email field
+                      AuthTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        hint: 'Enter your email',
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: Icons.email_outlined,
+                        enabled: !isLoading,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email';
+                          }
+                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                              .hasMatch(value)) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
+
+                      const SizedBox(height: 16),
+
+                      // Password field
+                      AuthTextField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        hint: 'Enter your password',
+                        obscureText: _obscurePassword,
+                        prefixIcon: Icons.lock_outline,
+                        enabled: !isLoading,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: ThryveColors.textSecondary,
+                          ),
+                          onPressed: () {
+                            setState(() => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your password';
+                          }
+                          if (value.length < 8) {
+                            return 'Password must be at least 8 characters';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Forgot password
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => context.push(AppRoutes.forgotPassword),
+                          child: Text(
+                            'Forgot Password?',
+                            style: ThryveTypography.labelLarge.copyWith(
+                              color: ThryveColors.accent,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Login button
+                      _buildLoginButton(context, isLoading),
+
+                      const SizedBox(height: 32),
+
+                      // Divider
+                      _buildDivider(),
+
+                      const SizedBox(height: 32),
+
+                      // Social login buttons (placeholder for future)
+                      _buildSocialLogins(isLoading),
+
+                      const SizedBox(height: 32),
+
+                      // Sign up link
+                      _buildSignUpLink(isLoading),
+
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Login button
-                _buildLoginButton(),
-
-                const SizedBox(height: 32),
-
-                // Divider
-                _buildDivider(),
-
-                const SizedBox(height: 32),
-
-                // Social login buttons
-                _buildSocialLogins(),
-
-                const SizedBox(height: 32),
-
-                // Sign up link
-                _buildSignUpLink(),
-
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -207,11 +234,11 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildLoginButton() {
+  Widget _buildLoginButton(BuildContext blocContext, bool isLoading) {
     return SizedBox(
       height: 56,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleLogin,
+        onPressed: isLoading ? null : () => _handleLogin(blocContext),
         style: ElevatedButton.styleFrom(
           backgroundColor: ThryveColors.accent,
           foregroundColor: Colors.white,
@@ -220,12 +247,12 @@ class _LoginPageState extends State<LoginPage> {
           ),
           elevation: 0,
         ),
-        child: _isLoading
+        child: isLoading
             ? const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
+                  strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
@@ -243,12 +270,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            color: ThryveColors.divider,
-          ),
-        ),
+        const Expanded(child: Divider(color: ThryveColors.divider)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -258,43 +280,50 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: ThryveColors.divider,
-          ),
-        ),
+        const Expanded(child: Divider(color: ThryveColors.divider)),
       ],
     );
   }
 
-  Widget _buildSocialLogins() {
-    return Row(
+  Widget _buildSocialLogins(bool isLoading) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
       children: [
-        Expanded(
-          child: SocialLoginButton(
-            icon: Icons.g_mobiledata_rounded,
-            label: 'Google',
-            onPressed: () {
-              // TODO: Implement Google sign in
-            },
-          ),
+        SocialLoginButton(
+          icon: Icons.g_mobiledata,
+          label: 'Continue with Google',
+          onPressed: isLoading
+              ? null
+              : () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Google sign-in coming soon!'),
+                    ),
+                  );
+                },
+          isDark: isDark,
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: SocialLoginButton(
-            icon: Icons.apple,
-            label: 'Apple',
-            onPressed: () {
-              // TODO: Implement Apple sign in
-            },
-          ),
+        const SizedBox(height: 12),
+        SocialLoginButton(
+          icon: Icons.apple,
+          label: 'Continue with Apple',
+          onPressed: isLoading
+              ? null
+              : () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Apple sign-in coming soon!'),
+                    ),
+                  );
+                },
+          isDark: isDark,
         ),
       ],
     );
   }
 
-  Widget _buildSignUpLink() {
+  Widget _buildSignUpLink(bool isLoading) {
     return Center(
       child: RichText(
         text: TextSpan(
@@ -305,11 +334,12 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             TextSpan(
               text: 'Sign Up',
-              style: ThryveTypography.labelLarge.copyWith(
+              style: ThryveTypography.bodyMedium.copyWith(
                 color: ThryveColors.accent,
+                fontWeight: FontWeight.w600,
               ),
               recognizer: TapGestureRecognizer()
-                ..onTap = () => context.push(AppRoutes.register),
+                ..onTap = isLoading ? null : () => context.push(AppRoutes.register),
             ),
           ],
         ),

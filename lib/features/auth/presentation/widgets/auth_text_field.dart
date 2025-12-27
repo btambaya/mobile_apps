@@ -15,6 +15,7 @@ class AuthTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final TextCapitalization textCapitalization;
   final void Function(String)? onChanged;
+  final bool enabled;
 
   const AuthTextField({
     super.key,
@@ -29,6 +30,7 @@ class AuthTextField extends StatelessWidget {
     this.validator,
     this.textCapitalization = TextCapitalization.none,
     this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -52,6 +54,7 @@ class AuthTextField extends StatelessWidget {
           textCapitalization: textCapitalization,
           validator: validator,
           onChanged: onChanged,
+          enabled: enabled,
           style: ThryveTypography.bodyLarge.copyWith(
             color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
           ),

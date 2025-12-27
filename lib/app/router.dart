@@ -20,6 +20,7 @@ import '../features/kyc/presentation/pages/kyc_pending_page.dart';
 // Portfolio feature imports
 import '../features/portfolio/presentation/pages/home_page.dart';
 import '../features/portfolio/presentation/pages/portfolio_page.dart';
+import '../features/portfolio/presentation/pages/auto_invest_page.dart';
 
 // Trading feature imports
 import '../features/trading/presentation/pages/trade_page.dart';
@@ -68,6 +69,7 @@ class AppRoutes {
   // Main app routes
   static const String home = '/home';
   static const String portfolio = '/portfolio';
+  static const String autoInvest = '/auto-invest';
   static const String trade = '/trade';
   static const String stockDetail = '/trade/:symbol';
   static const String wallet = '/wallet';
@@ -211,6 +213,10 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.bankAccounts,
         builder: (context, state) => const BankAccountsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.autoInvest,
+        builder: (context, state) => const AutoInvestPage(),
       ),
       GoRoute(
         path: AppRoutes.settings,

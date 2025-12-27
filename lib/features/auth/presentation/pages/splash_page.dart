@@ -3,8 +3,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../data/repositories/auth_repository_impl.dart';
 
-/// Splash screen with animated logo
+/// Splash screen with animated logo and auth check
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -17,6 +18,7 @@ class _SplashPageState extends State<SplashPage>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  final _authRepository = AuthRepositoryImpl();
 
   @override
   void initState() {
@@ -42,13 +44,35 @@ class _SplashPageState extends State<SplashPage>
 
     _controller.forward();
 
-    // Navigate after animation
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        // TODO: Check if user is logged in
+    // Check auth and navigate
+    _checkAuthAndNavigate();
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    // Wait for animation to complete
+    await Future.delayed(const Duration(milliseconds: 2500));
+    
+    if (!mounted) return;
+
+    try {
+      // Check if user has valid session
+      final user = await _authRepository.getCurrentUser();
+      
+      if (!mounted) return;
+      
+      if (user != null) {
+        // User is logged in - go to home
+        context.go(AppRoutes.home);
+      } else {
+        // No session - go to onboarding
         context.go(AppRoutes.onboarding);
       }
-    });
+    } catch (e) {
+      // Error checking auth - go to onboarding
+      if (mounted) {
+        context.go(AppRoutes.onboarding);
+      }
+    }
   }
 
   @override
@@ -99,16 +123,17 @@ class _SplashPageState extends State<SplashPage>
                     // App name
                     Text(
                       'Thryve',
-                      style: ThryveTypography.displayMedium.copyWith(
+                      style: ThryveTypography.displayLarge.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 8),
+                    // Tagline
                     Text(
-                      'Invest in US Stocks',
+                      'Invest in your future',
                       style: ThryveTypography.bodyLarge.copyWith(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
