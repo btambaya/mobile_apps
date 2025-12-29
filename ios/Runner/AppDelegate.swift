@@ -3,7 +3,6 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private var secureView: UIView?
   
   override func application(
     _ application: UIApplication,
@@ -11,28 +10,13 @@ import UIKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     
-    // Prevent screenshots and screen recording
-    setupSecureScreen()
+    // Register for screenshot notifications
+    setupScreenshotNotification()
     
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  private func setupSecureScreen() {
-    // Create a secure text field to prevent screenshots
-    // This technique works because UITextField with isSecureTextEntry blocks screenshots
-    guard let window = UIApplication.shared.windows.first else { return }
-    
-    let secureField = UITextField()
-    secureField.isSecureTextEntry = true
-    secureField.isUserInteractionEnabled = false
-    
-    // Add the secure text field's layer to the window
-    // This makes the entire window secure
-    if let secureLayer = secureField.layer.sublayers?.first {
-      secureLayer.addSublayer(window.layer)
-      window.layer.superlayer?.addSublayer(secureLayer)
-    }
-    
+  private func setupScreenshotNotification() {
     // Listen for screenshot notification (optional: to show warning)
     NotificationCenter.default.addObserver(
       forName: UIApplication.userDidTakeScreenshotNotification,
@@ -40,8 +24,28 @@ import UIKit
       queue: .main
     ) { _ in
       // You could show an alert here if needed
-      print("Screenshot attempted - content may be protected")
+      print("Screenshot detected")
     }
   }
+  
+  // Hide content when app goes to background (app switcher protection)
+  override func applicationWillResignActive(_ application: UIApplication) {
+    // Add blur overlay when app goes to background
+    if let window = self.window {
+      let blurEffect = UIBlurEffect(style: .light)
+      let blurView = UIVisualEffectView(effect: blurEffect)
+      blurView.frame = window.bounds
+      blurView.tag = 999
+      window.addSubview(blurView)
+    }
+    super.applicationWillResignActive(application)
+  }
+  
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    // Remove blur overlay when app becomes active
+    if let window = self.window {
+      window.viewWithTag(999)?.removeFromSuperview()
+    }
+    super.applicationDidBecomeActive(application)
+  }
 }
-

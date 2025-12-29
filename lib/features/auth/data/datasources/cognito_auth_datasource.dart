@@ -5,19 +5,26 @@ import '../../domain/entities/auth_user.dart';
 
 /// Cognito authentication data source
 /// Handles all direct interactions with AWS Cognito
+/// SINGLETON: All parts of the app share the same session state
 class CognitoAuthDatasource {
-  late final CognitoUserPool _userPool;
-  final FlutterSecureStorage _secureStorage;
-  CognitoUser? _cognitoUser;
-  CognitoUserSession? _session;
-
-  CognitoAuthDatasource({FlutterSecureStorage? secureStorage})
-      : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
+  // Singleton instance
+  static final CognitoAuthDatasource _instance = CognitoAuthDatasource._internal();
+  
+  // Factory constructor returns the singleton
+  factory CognitoAuthDatasource({FlutterSecureStorage? secureStorage}) => _instance;
+  
+  // Private constructor
+  CognitoAuthDatasource._internal() : _secureStorage = const FlutterSecureStorage() {
     _userPool = CognitoUserPool(
       AuthConfig.userPoolId,
       AuthConfig.clientId,
     );
   }
+  
+  late final CognitoUserPool _userPool;
+  final FlutterSecureStorage _secureStorage;
+  CognitoUser? _cognitoUser;
+  CognitoUserSession? _session;
 
   /// Sign up a new user
   Future<void> signUp({
@@ -90,7 +97,11 @@ class CognitoAuthDatasource {
     // Get user attributes
     final attributes = await _cognitoUser!.getUserAttributes();
     
-    return _buildAuthUser(attributes, email);
+    // Build and cache user data locally for offline access
+    final user = _buildAuthUser(attributes, email);
+    await _cacheUserAttributes(user);
+    
+    return user;
   }
 
   /// Sign out current user
@@ -104,6 +115,7 @@ class CognitoAuthDatasource {
   }
 
   /// Get current user from stored session
+  /// Uses locally cached attributes to avoid API calls
   Future<AuthUser?> getCurrentUser() async {
     final email = await _secureStorage.read(key: AuthConfig.emailKey);
     final accessToken = await _secureStorage.read(key: AuthConfig.accessTokenKey);
@@ -144,10 +156,10 @@ class CognitoAuthDatasource {
         }
       }
 
-      // Get user attributes
-      final attributes = await _cognitoUser!.getUserAttributes();
-      return _buildAuthUser(attributes, email);
+      // READ FROM LOCAL CACHE - no network call!
+      return await _getCachedUser(email);
     } catch (e) {
+      // Session error - clear and force re-login
       await _clearStoredSession();
       return null;
     }
@@ -311,6 +323,62 @@ class CognitoAuthDatasource {
     await _secureStorage.delete(key: AuthConfig.refreshTokenKey);
     await _secureStorage.delete(key: AuthConfig.emailKey);
     await _secureStorage.delete(key: AuthConfig.userIdKey);
+    // Also clear cached user attributes
+    await _secureStorage.delete(key: AuthConfig.givenNameKey);
+    await _secureStorage.delete(key: AuthConfig.familyNameKey);
+    await _secureStorage.delete(key: AuthConfig.phoneNumberKey);
+    await _secureStorage.delete(key: AuthConfig.countryKey);
+  }
+
+  /// Cache user attributes locally for offline access
+  Future<void> _cacheUserAttributes(AuthUser user) async {
+    await _secureStorage.write(
+      key: AuthConfig.userIdKey,
+      value: user.id,
+    );
+    if (user.givenName != null) {
+      await _secureStorage.write(
+        key: AuthConfig.givenNameKey,
+        value: user.givenName!,
+      );
+    }
+    if (user.familyName != null) {
+      await _secureStorage.write(
+        key: AuthConfig.familyNameKey,
+        value: user.familyName!,
+      );
+    }
+    if (user.phoneNumber != null) {
+      await _secureStorage.write(
+        key: AuthConfig.phoneNumberKey,
+        value: user.phoneNumber!,
+      );
+    }
+    if (user.country != null) {
+      await _secureStorage.write(
+        key: AuthConfig.countryKey,
+        value: user.country!,
+      );
+    }
+  }
+
+  /// Get user from locally cached attributes (no network call)
+  Future<AuthUser?> _getCachedUser(String email) async {
+    final userId = await _secureStorage.read(key: AuthConfig.userIdKey);
+    final givenName = await _secureStorage.read(key: AuthConfig.givenNameKey);
+    final familyName = await _secureStorage.read(key: AuthConfig.familyNameKey);
+    final phoneNumber = await _secureStorage.read(key: AuthConfig.phoneNumberKey);
+    final country = await _secureStorage.read(key: AuthConfig.countryKey);
+
+    return AuthUser(
+      id: userId ?? '',
+      email: email,
+      givenName: givenName,
+      familyName: familyName,
+      phoneNumber: phoneNumber,
+      country: country,
+      isEmailVerified: true, // Assume verified if logged in
+    );
   }
 
   AuthUser _buildAuthUser(List<CognitoUserAttribute>? attributes, String email) {

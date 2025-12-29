@@ -129,7 +129,60 @@ Thryve is a mobile investment app that allows Nigerian users to invest in US sto
 - **New Widget Components:** 10
 - **New Services Created:** 4 (ApiService, UserProfileService, ThemeService, SessionService)
 - **Total App Screens:** 38+
-- **Build Status:** Passing ✅
+### Objectives Completed (Dec 29 - Code Review & Security Audit)
+25. ✅ **Comprehensive Codebase Review** - Reviewed all 50+ dart files across features
+26. ✅ **Bug Fixes** - Fixed 4 bugs identified during review:
+    - Removed unused `_resetBiometricSession()` method in lock_screen.dart
+    - Fixed `removePin()` to sync removal to Cognito for cross-device consistency
+    - Removed unused `_shellNavigatorKey` variable from router.dart
+    - Fixed security_page.dart Change Password to call Cognito API
+27. ✅ **Code Review Document** - Created findings document with pre-production items
+28. ⚠️ **Security Items Documented** - For pre-production:
+    - PIN hashing without salt (requires migration strategy)
+    - API key handling (use env variables)
+
+### Objectives Completed (Dec 29 - Settings & Devices Refactor)
+29. ✅ **Settings Page Refactor**:
+    - Added "Change Passcode" tile (moved from security page)
+    - Renamed "Two-Factor Authentication" → "Devices"
+    - Updated icon to `Icons.devices`
+    - Added full PIN sheet with keypad for passcode changes
+30. ✅ **Security Page → Devices Page**:
+    - Renamed page title from "Security" to "Devices"
+    - Removed Password & Passcode section (moved to Settings)
+    - Removed Biometric Authentication section (stays in Settings)
+    - Added info banner explaining device management
+    - Added delete button to each non-current device
+    - Kept "Log out all other devices" with confirmation dialog
+
+### Objectives Completed (Dec 29 - Bug Fixes & Architecture Improvements)
+31. ✅ **iOS Crash Fix** - Fixed `AppDelegate.swift` crash on launch
+    - Removed problematic CALayer manipulation in `setupSecureScreen()`
+    - Kept blur overlay for app switcher protection
+32. ✅ **Biometric Button Fix** - Fixed button not working after cancel
+    - Added `_onBiometricButtonTap()` method that resets session flag
+    - Button now properly re-triggers biometric auth after cancel
+33. ✅ **Cross-Device Passcode Sync** - Fixed passcode prompt on new device
+    - Added `syncFromCloud()` call in splash_page.dart after session validation
+    - Syncs passcode hash from Cognito before checking if enabled
+34. ✅ **Profile Data Caching** - Fixed placeholder profile after unlock
+    - Added user attribute caching (givenName, familyName, etc.) to local storage
+    - `getCurrentUser()` now reads from local cache (no network call)
+    - Added storage keys in `AuthConfig` for user attributes
+35. ✅ **CognitoAuthDatasource Singleton** - Fixed session state sharing
+    - Converted to singleton pattern so all app components share same session
+    - Fixed password change "session expired" error
+    - Fixed passcode sync failing due to different instances
+
+### Session Metrics (Dec 29 - Bug Fixes)
+- **Critical Bugs Fixed:** 5
+- **Architecture Improvements:** 2 (local caching, singleton)
+- **Files Modified:** 6
+
+### Session Metrics (Dec 29)
+- **Files Reviewed:** 50+ dart files
+- **Bugs Fixed:** 4
+- **Pages Refactored:** 2 (settings_page.dart, security_page.dart)
 
 ---
 

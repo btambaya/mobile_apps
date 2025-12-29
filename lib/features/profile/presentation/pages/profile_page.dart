@@ -32,40 +32,35 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadUser() async {
-    // Check if we have cached profile (instant load!)
-    if (_profileService.hasCache) {
-      setState(() {
-        _profile = _profileService.cachedProfile;
-        _isLoading = false;
-      });
-      return;
+    // STRATEGY: Show Cognito data immediately, then update with API data
+    
+    // 1. Load Cognito data first (always available, instant)
+    try {
+      final user = await _authRepository.getCurrentUser();
+      if (mounted && user != null) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      // Cognito failed, continue to try API
     }
 
-    // Fetch from service (will cache automatically)
+    // 2. Try API in background - update display if successful
     try {
-      final profile = await _profileService.getProfile();
+      // Force refresh to get latest data (handles post-signup race condition)
+      final profile = await _profileService.getProfile(forceRefresh: !_profileService.hasCache);
       if (mounted) {
         setState(() {
           _profile = profile;
           _isLoading = false;
         });
       }
-    } catch (e) {
-      // Fallback to Cognito if API fails
-      try {
-        final user = await _authRepository.getCurrentUser();
-        if (mounted) {
-          setState(() {
-            _user = user;
-            _isLoading = false;
-          });
-        }
-      } catch (e2) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+    } catch (_) {
+      // API failed, but we already have Cognito data displayed
+      if (mounted && _user == null && _profile == null) {
+        setState(() => _isLoading = false);
       }
     }
   }

@@ -71,9 +71,17 @@ class PinService {
   }
 
   /// Remove PIN
+  /// Clears from both local storage AND Cognito for cross-device sync
   Future<void> removePin() async {
     await _secureStorage.delete(key: _pinKey);
     await _secureStorage.write(key: _pinEnabledKey, value: 'false');
+    
+    // Sync removal to Cognito (clear the custom attribute)
+    try {
+      await _cognitoDatasource.savePasscodeHash('');
+    } catch (e) {
+      debugPrint('Failed to clear passcode from Cognito: $e');
+    }
   }
 
   /// Hash PIN with SHA256 for secure storage

@@ -94,7 +94,6 @@ class AppRouter {
   AppRouter._();
 
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
-  static final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -163,7 +162,6 @@ class AppRouter {
 
       // ============ Main App Shell (with bottom nav) ============
       ShellRoute(
-        navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) {
           return MainShell(child: child);
         },

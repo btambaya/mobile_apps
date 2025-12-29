@@ -87,11 +87,12 @@ class _LockScreenState extends State<LockScreen> {
     }
   }
   
-  /// Reset session flag - allows user to retry biometric manually
-  void _resetBiometricSession() {
-    _biometricAttemptedThisSession = false;
+  /// Manual biometric button tap - resets session flag for retry
+  void _onBiometricButtonTap() {
+    _biometricAttemptedThisSession = false;  // Reset for manual retry
+    _authenticateWithBiometric();
   }
-
+  
   void _onKeyPressed(String key) {
     HapticFeedback.lightImpact();
     
@@ -569,7 +570,7 @@ class _LockScreenState extends State<LockScreen> {
                 TextButton.icon(
                   // FIX 3: Do NOT reset session on button press
                   // Session should only reset when lock screen is dismissed
-                  onPressed: _authenticateWithBiometric,
+                  onPressed: _onBiometricButtonTap,
                   icon: Icon(
                     _biometricTypeName.contains('Face') ? Icons.face : Icons.fingerprint,
                     color: ThryveColors.accent,

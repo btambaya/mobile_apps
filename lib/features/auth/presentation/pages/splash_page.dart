@@ -72,8 +72,12 @@ class _SplashPageState extends State<SplashPage>
         // Has auth session - mark as logged in
         await sessionService.setLoggedIn(true);
         
-        if (!hasPasscode) {
-          // Has session but no passcode - show splash and go to passcode setup
+        // SYNC passcode from Cognito (for cross-device login)
+        await _pinService.syncFromCloud();
+        final hasPasscodeNow = await _pinService.isPinEnabled();
+        
+        if (!hasPasscodeNow) {
+          // Has session but no passcode anywhere - go to passcode setup
           _controller.forward();
           await Future.delayed(const Duration(milliseconds: 2500));
           if (mounted) context.go(AppRoutes.passcodeSetup);

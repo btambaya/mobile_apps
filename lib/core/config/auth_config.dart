@@ -11,4 +11,10 @@ class AuthConfig {
   static const String refreshTokenKey = 'cognito_refresh_token';
   static const String userIdKey = 'cognito_user_id';
   static const String emailKey = 'cognito_email';
+  
+  // User attribute storage keys (cached locally for offline access)
+  static const String givenNameKey = 'user_given_name';
+  static const String familyNameKey = 'user_family_name';
+  static const String phoneNumberKey = 'user_phone_number';
+  static const String countryKey = 'user_country';
 }
