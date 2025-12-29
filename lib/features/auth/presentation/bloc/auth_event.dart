@@ -103,3 +103,9 @@ class AuthConfirmForgotPasswordRequested extends AuthEvent {
   @override
   List<Object?> get props => [email, code, newPassword];
 }
+
+/// Login via biometric (Face ID / Fingerprint) using stored session
+class AuthBiometricLoginRequested extends AuthEvent {
+  const AuthBiometricLoginRequested();
+}
+

@@ -89,4 +89,16 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> refreshSession() async {
     await _datasource.refreshSession();
   }
+
+  @override
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _datasource.changePassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
+  }
 }
+

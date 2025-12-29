@@ -67,6 +67,8 @@ dependencies:
   freezed_annotation: ^2.4.4
   http: ^1.6.0
   amazon_cognito_identity_dart_2: ^3.8.1
+  device_info_plus: ^12.3.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
@@ -112,9 +114,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/thryve_icon.png"
-  adaptive_icon_background: "#f37021"
-  adaptive_icon_foreground: "assets/images/thryve_icon.png"
+  image_path: "assets/images/thryve_ios_icon.png"
   min_sdk_android: 21
   web:
     generate: true
@@ -127,3 +127,4 @@ flutter_launcher_icons:
   macos:
     generate: true
     image_path: "assets/images/thryve_icon.png"
+

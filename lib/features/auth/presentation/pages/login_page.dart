@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/biometric_auth_service.dart';
+import '../../../../core/services/session_service.dart';
+import '../../data/repositories/auth_repository_impl.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -23,7 +26,52 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final BiometricAuthService _biometricService = BiometricAuthService();
+  
   bool _obscurePassword = true;
+  bool _biometricAvailable = false;
+  String _biometricTypeName = 'Biometric';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailability();
+  }
+
+  Future<void> _checkBiometricAvailability() async {
+    final canAuth = await _biometricService.canAuthenticate();
+    final isEnabled = await _biometricService.isBiometricEnabled();
+    final typeName = await _biometricService.getBiometricTypeName();
+    
+    // Also check if there's a stored session (for biometric login to work)
+    bool hasStoredSession = false;
+    try {
+      final authRepo = AuthRepositoryImpl();
+      final user = await authRepo.getCurrentUser();
+      hasStoredSession = user != null;
+    } catch (_) {
+      hasStoredSession = false;
+    }
+    
+    if (mounted) {
+      setState(() {
+        // Only show biometric if: device supports it AND user enabled it AND has stored session
+        _biometricAvailable = canAuth && isEnabled && hasStoredSession;
+        _biometricTypeName = typeName;
+      });
+    }
+  }
+
+  Future<void> _handleBiometricLogin(BuildContext blocContext) async {
+    final success = await _biometricService.authenticate(
+      reason: 'Authenticate to login to Thryve',
+    );
+    
+    if (success && mounted) {
+      // Biometric succeeded - trigger biometric login event
+      blocContext.read<AuthBloc>().add(const AuthBiometricLoginRequested());
+    }
+  }
 
   @override
   void dispose() {
@@ -51,10 +99,15 @@ class _LoginPageState extends State<LoginPage> {
     return BlocProvider(
       create: (_) => AuthBloc(),
       child: BlocConsumer<AuthBloc, AuthState>(
-        listener: (context, state) {
+        listener: (context, state) async {
           if (state is AuthAuthenticated) {
-            // Check KYC status and navigate accordingly
-            context.go(AppRoutes.home);
+            // Mark as logged in and go to home
+            await SessionService().setLoggedIn(true);
+            if (context.mounted) context.go(AppRoutes.home);
+          } else if (state is AuthNeedsPasscodeSetup) {
+            // First login - mark as logged in, need to set up passcode
+            await SessionService().setLoggedIn(true);
+            if (context.mounted) context.go(AppRoutes.passcodeSetup);
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -158,6 +211,12 @@ class _LoginPageState extends State<LoginPage> {
                       // Login button
                       _buildLoginButton(context, isLoading),
 
+                      // Biometric login button
+                      if (_biometricAvailable) ...[
+                        const SizedBox(height: 16),
+                        _buildBiometricButton(context, isLoading),
+                      ],
+
                       const SizedBox(height: 32),
 
                       // Divider
@@ -185,20 +244,51 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Widget _buildBiometricButton(BuildContext blocContext, bool isLoading) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return SizedBox(
+      height: 56,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : () => _handleBiometricLogin(blocContext),
+        icon: Icon(
+          _biometricTypeName.contains('Face') ? Icons.face : Icons.fingerprint,
+          color: ThryveColors.accent,
+        ),
+        label: Text(
+          'Login with $_biometricTypeName',
+          style: ThryveTypography.button.copyWith(
+            color: ThryveColors.accent,
+            fontSize: 16,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(
+            color: isDark ? ThryveColors.accent : ThryveColors.accent,
+            width: 1.5,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(bool isDark) {
     return Column(
       children: [
-        // Thryve leaf icon logo
+        // Thryve logo - orange background with white leaf
         Container(
-          width: 80,
-          height: 80,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: ThryveColors.accentGradient,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
                 color: ThryveColors.accent.withValues(alpha: 0.3),

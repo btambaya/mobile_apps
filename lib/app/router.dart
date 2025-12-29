@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-// Auth feature imports
 import '../features/auth/presentation/pages/splash_page.dart';
 import '../features/auth/presentation/pages/onboarding_page.dart';
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/pages/register_page.dart';
 import '../features/auth/presentation/pages/verify_otp_page.dart';
 import '../features/auth/presentation/pages/forgot_password_page.dart';
+import '../features/auth/presentation/pages/passcode_setup_page.dart';
 
 // KYC feature imports
 import '../features/kyc/presentation/pages/kyc_start_page.dart';
@@ -57,6 +57,7 @@ class AppRoutes {
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String verifyOtp = '/verify-otp';
+  static const String passcodeSetup = '/passcode-setup';
 
   // KYC routes
   static const String kycStart = '/kyc';
@@ -124,6 +125,12 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.verifyOtp,
         builder: (context, state) => const VerifyOtpPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.passcodeSetup,
+        builder: (context, state) => PasscodeSetupPage(
+          onPasscodeSet: () => context.go(AppRoutes.home),
+        ),
       ),
 
       // ============ KYC Routes ============

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/session_service.dart';
 import '../../../../core/services/user_profile_service.dart';
 import '../../../auth/data/repositories/auth_repository_impl.dart';
 import '../../../auth/domain/entities/auth_user.dart';
@@ -455,8 +456,9 @@ class _ProfilePageState extends State<ProfilePage> {
         child: OutlinedButton.icon(
           onPressed: () async {
             await _authRepository.signOut();
+            await SessionService().logout();
             if (mounted) {
-              context.go(AppRoutes.onboarding);
+              context.go(AppRoutes.login);
             }
           },
           icon: const Icon(Icons.logout, color: ThryveColors.error),

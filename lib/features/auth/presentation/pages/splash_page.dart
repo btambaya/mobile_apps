@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/pin_service.dart';
+import '../../../../core/services/session_service.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 
 /// Splash screen with animated logo and auth check
@@ -19,6 +21,7 @@ class _SplashPageState extends State<SplashPage>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   final _authRepository = AuthRepositoryImpl();
+  final _pinService = PinService();
 
   @override
   void initState() {
@@ -42,33 +45,61 @@ class _SplashPageState extends State<SplashPage>
       ),
     );
 
-    _controller.forward();
-
-    // Check auth and navigate
+    // Check auth FIRST before starting animation
     _checkAuthAndNavigate();
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Wait for animation to complete
-    await Future.delayed(const Duration(milliseconds: 2500));
-    
     if (!mounted) return;
 
     try {
-      // Check if user has valid session
+      final sessionService = SessionService();
+      final hasPasscode = await _pinService.isPinEnabled();
+      
+      // Check if user has passcode AND is logged in
+      if (hasPasscode && sessionService.isLoggedIn) {
+        // RETURNING LOGGED-IN USER - show brief splash then lock screen
+        _controller.forward();
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (mounted) context.go(AppRoutes.home);
+        return;
+      }
+      
+      // Check auth session
       final user = await _authRepository.getCurrentUser();
       
-      if (!mounted) return;
-      
       if (user != null) {
-        // User is logged in - go to home
-        context.go(AppRoutes.home);
+        // Has auth session - mark as logged in
+        await sessionService.setLoggedIn(true);
+        
+        if (!hasPasscode) {
+          // Has session but no passcode - show splash and go to passcode setup
+          _controller.forward();
+          await Future.delayed(const Duration(milliseconds: 2500));
+          if (mounted) context.go(AppRoutes.passcodeSetup);
+        } else {
+          // Has session and passcode - go to home (lock screen will show)
+          _controller.forward();
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (mounted) context.go(AppRoutes.home);
+        }
       } else {
-        // No session - go to onboarding
-        context.go(AppRoutes.onboarding);
+        // No session - check if returning user (has passcode = has logged in before)
+        _controller.forward();
+        await Future.delayed(const Duration(milliseconds: 2500));
+        
+        if (hasPasscode) {
+          // Returning user who logged out - go directly to login (skip onboarding)
+          if (mounted) context.go(AppRoutes.login);
+        } else {
+          // First-time user - go to onboarding
+          if (mounted) context.go(AppRoutes.onboarding);
+        }
       }
     } catch (e) {
-      // Error checking auth - go to onboarding
+      // Error checking - show splash then go to onboarding
+      _controller.forward();
+      await Future.delayed(const Duration(milliseconds: 2500));
       if (mounted) {
         context.go(AppRoutes.onboarding);
       }

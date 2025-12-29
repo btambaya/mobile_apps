@@ -102,6 +102,23 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  /// DELETE request with authentication
+  Future<Map<String, dynamic>> delete(String endpoint) async {
+    final headers = await _getAuthHeaders();
+    final url = Uri.parse('$_baseUrl$endpoint');
+
+    final response = await http.delete(url, headers: headers);
+
+    if (response.statusCode == 401) {
+      await _authDatasource.refreshSession();
+      final newHeaders = await _getAuthHeaders();
+      final retryResponse = await http.delete(url, headers: newHeaders);
+      return _handleResponse(retryResponse);
+    }
+
+    return _handleResponse(response);
+  }
+
   Map<String, dynamic> _handleResponse(http.Response response) {
     final body = jsonDecode(response.body);
 

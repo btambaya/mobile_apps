@@ -29,6 +29,16 @@ class AuthAuthenticated extends AuthState {
   List<Object?> get props => [user];
 }
 
+/// Authenticated but needs passcode setup first
+class AuthNeedsPasscodeSetup extends AuthState {
+  final AuthUser user;
+
+  const AuthNeedsPasscodeSetup(this.user);
+
+  @override
+  List<Object?> get props => [user];
+}
+
 /// Unauthenticated - no user signed in
 class AuthUnauthenticated extends AuthState {
   const AuthUnauthenticated();
@@ -78,3 +88,4 @@ class AuthError extends AuthState {
   @override
   List<Object?> get props => [message];
 }
+

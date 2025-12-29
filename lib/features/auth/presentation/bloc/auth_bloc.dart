@@ -2,6 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../../core/services/pin_service.dart';
+import '../../../../core/utils/auth_error_helper.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -20,6 +22,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignOutRequested>(_onSignOutRequested);
     on<AuthForgotPasswordRequested>(_onForgotPasswordRequested);
     on<AuthConfirmForgotPasswordRequested>(_onConfirmForgotPasswordRequested);
+    on<AuthBiometricLoginRequested>(_onBiometricLoginRequested);
   }
 
   Future<void> _onAuthCheckRequested(
@@ -57,7 +60,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } on CognitoClientException catch (e) {
       emit(AuthError(_parseError(e)));
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(AuthErrorHelper.getErrorMessage(e)));
     }
   }
 
@@ -103,7 +106,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         email: event.email,
         password: event.password,
       );
-      emit(AuthAuthenticated(user));
+      
+      // Check if passcode is set up locally
+      final pinService = PinService();
+      var hasPasscode = await pinService.isPinEnabled();
+      
+      // If no local passcode, try to sync from Cognito (cross-device login)
+      if (!hasPasscode) {
+        final synced = await pinService.syncFromCloud();
+        hasPasscode = synced;
+      }
+      
+      if (hasPasscode) {
+        emit(AuthAuthenticated(user));
+      } else {
+        emit(AuthNeedsPasscodeSetup(user));
+      }
     } on CognitoClientException catch (e) {
       emit(AuthError(_parseError(e)));
     } catch (e) {
@@ -155,6 +173,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthError(_parseError(e)));
     } catch (e) {
       emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> _onBiometricLoginRequested(
+    AuthBiometricLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    try {
+      // Biometric auth already passed at this point
+      // Try to restore session from stored tokens
+      final user = await _authRepository.getCurrentUser();
+      if (user != null) {
+        // Check if passcode is set up
+        final pinService = PinService();
+        final hasPasscode = await pinService.isPinEnabled();
+        
+        if (hasPasscode) {
+          emit(AuthAuthenticated(user));
+        } else {
+          emit(AuthNeedsPasscodeSetup(user));
+        }
+      } else {
+        emit(const AuthError('Session expired. Please login with password.'));
+      }
+    } catch (e) {
+      emit(const AuthError('Session expired. Please login with password.'));
     }
   }
 

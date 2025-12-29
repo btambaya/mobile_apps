@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/finnhub_models.dart';
 
@@ -47,7 +48,7 @@ class FinnhubRemoteDataSource {
       }
       return [];
     } catch (e) {
-      print('Error fetching analyst recommendations: $e');
+      debugPrint('Error fetching analyst recommendations: $e');
       return [];
     }
   }
@@ -66,7 +67,7 @@ class FinnhubRemoteDataSource {
       }
       return null;
     } catch (e) {
-      print('Error fetching price target: $e');
+      debugPrint('Error fetching price target: $e');
       return null;
     }
   }
@@ -84,7 +85,7 @@ class FinnhubRemoteDataSource {
       }
       return null;
     } catch (e) {
-      print('Error fetching basic financials: $e');
+      debugPrint('Error fetching basic financials: $e');
       return null;
     }
   }
@@ -109,7 +110,7 @@ class FinnhubRemoteDataSource {
       }
       return [];
     } catch (e) {
-      print('Error fetching company news: $e');
+      debugPrint('Error fetching company news: $e');
       return [];
     }
   }
@@ -138,7 +139,7 @@ class FinnhubRemoteDataSource {
       }
       return [];
     } catch (e) {
-      print('Error fetching earnings calendar: $e');
+      debugPrint('Error fetching earnings calendar: $e');
       return [];
     }
   }
@@ -157,7 +158,7 @@ class FinnhubRemoteDataSource {
       }
       return null;
     } catch (e) {
-      print('Error fetching company profile: $e');
+      debugPrint('Error fetching company profile: $e');
       return null;
     }
   }
@@ -174,7 +175,7 @@ class FinnhubRemoteDataSource {
       }
       return [];
     } catch (e) {
-      print('Error fetching peers: $e');
+      debugPrint('Error fetching peers: $e');
       return [];
     }
   }
@@ -190,7 +191,7 @@ class FinnhubRemoteDataSource {
       }
       return null;
     } catch (e) {
-      print('Error fetching quote: $e');
+      debugPrint('Error fetching quote: $e');
       return null;
     }
   }
@@ -199,3 +200,4 @@ class FinnhubRemoteDataSource {
     _client.close();
   }
 }
+

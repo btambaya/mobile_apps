@@ -206,6 +206,84 @@ class CognitoAuthDatasource {
     return await _secureStorage.read(key: AuthConfig.idTokenKey);
   }
 
+  /// Save passcode hash to Cognito user attributes
+  Future<void> savePasscodeHash(String passcodeHash) async {
+    final email = await _secureStorage.read(key: AuthConfig.emailKey);
+    
+    if (email == null || _cognitoUser == null) {
+      // Try to restore session
+      await getCurrentUser();
+      if (_cognitoUser == null) {
+        throw Exception('No user session found');
+      }
+    }
+
+    final attributes = [
+      CognitoUserAttribute(name: 'custom:passcode_hash', value: passcodeHash),
+    ];
+    
+    await _cognitoUser!.updateAttributes(attributes);
+  }
+
+  /// Get passcode hash from Cognito user attributes
+  Future<String?> getPasscodeHash() async {
+    if (_cognitoUser == null) {
+      await getCurrentUser();
+      if (_cognitoUser == null) {
+        return null;
+      }
+    }
+
+    try {
+      final attributes = await _cognitoUser!.getUserAttributes();
+      if (attributes != null) {
+        for (final attr in attributes) {
+          if (attr.name == 'custom:passcode_hash') {
+            return attr.value;
+          }
+        }
+      }
+    } catch (e) {
+      // Attribute may not exist yet
+      return null;
+    }
+    return null;
+  }
+
+
+  /// Change password for authenticated user
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final email = await _secureStorage.read(key: AuthConfig.emailKey);
+    
+    if (email == null) {
+      throw Exception('No user session found');
+    }
+
+    _cognitoUser = CognitoUser(email, _userPool);
+    
+    // First authenticate with old password
+    final authDetails = AuthenticationDetails(
+      username: email,
+      password: oldPassword,
+    );
+    
+    try {
+      _session = await _cognitoUser!.authenticateUser(authDetails);
+      
+      if (_session != null && _session!.isValid()) {
+        // Now change password
+        await _cognitoUser!.changePassword(oldPassword, newPassword);
+      } else {
+        throw Exception('Invalid session');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // Private helpers
 
   Future<void> _storeSession(CognitoUserSession session, String email) async {

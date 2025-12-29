@@ -104,20 +104,31 @@ Thryve is a mobile investment app that allows Nigerian users to invest in US sto
 17. ✅ **Security Cleanup** - Removed all debug print statements from production code
 18. ✅ **API Documentation** - Complete guide for User Profile API
 
+### Objectives Completed (Dec 28 - Security Hardening)
+19. ✅ **Biometric Login** - Fixed toggle, added biometric option to login page
+20. ✅ **Dark Mode Toggle** - Now actually changes app theme + persisted
+21. ✅ **Change Password** - Wired to Cognito API with validation
+22. ✅ **Session Timeout & Lock** - App locks on background, biometric to unlock
+23. ✅ **Disable Screenshots** - Android FLAG_SECURE + iOS secure overlay
+24. 📋 **Device Management** - AWS setup guide documented (pending deployment)
+
 ### AWS Infrastructure Configured
 - **API Gateway:** `https://y1mheifune.execute-api.us-east-1.amazonaws.com/prod`
 - **Lambda Functions:**
   - `thryve-get-user-profile` - Fetches user data from DynamoDB
   - `thryve-post-confirmation` - Creates user in DynamoDB on signup
-- **DynamoDB Table:** `thryve-users` - Stores extended user profiles
+  - `thryve-device-management` - *(Pending)* Device CRUD operations
+- **DynamoDB Tables:**
+  - `thryve-users` - Stores extended user profiles
+  - `thryve-user-devices` - *(Pending)* Device tracking for 3-device limit
 - **Cognito:** User Pool with Post Confirmation Lambda trigger
 
 ### Metrics
-- **New Screens Created:** 6
-- **Screens Modified:** 8
-- **New Widget Components:** 9
-- **New Services Created:** 2 (ApiService, UserProfileService)
-- **Total App Screens:** 37+
+- **New Screens Created:** 7
+- **Screens Modified:** 12
+- **New Widget Components:** 10
+- **New Services Created:** 4 (ApiService, UserProfileService, ThemeService, SessionService)
+- **Total App Screens:** 38+
 - **Build Status:** Passing ✅
 
 ---

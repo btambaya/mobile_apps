@@ -48,4 +48,11 @@ abstract class AuthRepository {
 
   /// Refresh session tokens
   Future<void> refreshSession();
+
+  /// Change password for authenticated user
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  });
 }
+

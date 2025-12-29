@@ -13,7 +13,6 @@ class AutoInvestPage extends StatefulWidget {
 }
 
 class _AutoInvestPageState extends State<AutoInvestPage> {
-  bool _isEnabled = false;
   String _selectedFrequency = 'Weekly';
   final _amountController = TextEditingController(text: '50');
   String? _selectedStock;

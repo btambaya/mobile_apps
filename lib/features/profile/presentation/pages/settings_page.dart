@@ -5,6 +5,9 @@ import '../../../../app/router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
 import '../../../../core/services/biometric_auth_service.dart';
+import '../../../../core/services/session_service.dart';
+import '../../../../core/services/theme_service.dart';
+import '../../../../core/utils/auth_error_helper.dart';
 import '../../../auth/data/repositories/auth_repository_impl.dart';
 
 /// Settings page - App preferences and configuration
@@ -17,6 +20,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final BiometricAuthService _biometricService = BiometricAuthService();
+  final ThemeService _themeService = ThemeService();
   
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
@@ -24,7 +28,6 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _pushNotifications = true;
   bool _emailNotifications = true;
   bool _smsNotifications = false;
-  bool _darkMode = false;
 
   @override
   void initState() {
@@ -153,8 +156,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: 'Dark Mode',
                 subtitle: 'Use dark theme',
                 icon: Icons.dark_mode_outlined,
-                value: _darkMode,
-                onChanged: (value) => setState(() => _darkMode = value),
+                value: _themeService.isDarkMode,
+                onChanged: (value) async {
+                  await _themeService.setDarkMode(value);
+                  setState(() {}); // Refresh UI to reflect new switch value
+                },
               ),
             ]),
             const SizedBox(height: 24),
@@ -270,7 +276,8 @@ class _SettingsPageState extends State<SettingsPage> {
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: ThryveColors.accent,
+        activeTrackColor: ThryveColors.accent.withValues(alpha: 0.5),
+        activeThumbColor: ThryveColors.accent,
       ),
     );
   }
@@ -372,94 +379,168 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _showChangePasswordSheet() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isLoading = false;
+    String? errorMessage;
     
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? ThryveColors.backgroundDark : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ThryveColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDark ? ThryveColors.backgroundDark : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: ThryveColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Change Password',
-                style: ThryveTypography.headlineSmall.copyWith(
-                  color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                const SizedBox(height: 24),
+                Text(
+                  'Change Password',
+                  style: ThryveTypography.headlineSmall.copyWith(
+                    color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Current Password',
-                  filled: true,
-                  fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'New Password',
-                  filled: true,
-                  fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Confirm New Password',
-                  filled: true,
-                  fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password changed successfully'),
-                      backgroundColor: ThryveColors.success,
+                const SizedBox(height: 24),
+                if (errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ThryveColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ThryveColors.accent,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Text(
+                      errorMessage!,
+                      style: ThryveTypography.bodySmall.copyWith(color: ThryveColors.error),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextField(
+                  controller: currentPasswordController,
+                  obscureText: true,
+                  enabled: !isLoading,
+                  decoration: InputDecoration(
+                    labelText: 'Current Password',
+                    filled: true,
+                    fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
-                child: Text(
-                  'Update Password',
-                  style: ThryveTypography.button.copyWith(color: Colors.white),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: true,
+                  enabled: !isLoading,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    filled: true,
+                    fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: true,
+                  enabled: !isLoading,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    filled: true,
+                    fillColor: isDark ? ThryveColors.surfaceDark : ThryveColors.surface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: isLoading ? null : () async {
+                    // Validate
+                    if (currentPasswordController.text.isEmpty ||
+                        newPasswordController.text.isEmpty ||
+                        confirmPasswordController.text.isEmpty) {
+                      setSheetState(() => errorMessage = 'Please fill in all fields');
+                      return;
+                    }
+                    
+                    if (newPasswordController.text != confirmPasswordController.text) {
+                      setSheetState(() => errorMessage = 'New passwords do not match');
+                      return;
+                    }
+                    
+                    if (newPasswordController.text.length < 8) {
+                      setSheetState(() => errorMessage = 'Password must be at least 8 characters');
+                      return;
+                    }
+                    
+                    setSheetState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    
+                    try {
+                      final authRepo = AuthRepositoryImpl();
+                      await authRepo.changePassword(
+                        oldPassword: currentPasswordController.text,
+                        newPassword: newPasswordController.text,
+                      );
+                      
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Password changed successfully'),
+                            backgroundColor: ThryveColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      setSheetState(() {
+                        isLoading = false;
+                        errorMessage = AuthErrorHelper.getErrorMessage(e);
+                      });
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThryveColors.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          'Update Password',
+                          style: ThryveTypography.button.copyWith(color: Colors.white),
+                        ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -557,12 +638,13 @@ class _SettingsPageState extends State<SettingsPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              // Sign out via AuthRepository
+              // Sign out - clear session but keep passcode
               final authRepo = AuthRepositoryImpl();
               await authRepo.signOut();
-              // Navigate to onboarding
+              await SessionService().logout();
+              // Navigate to login (not onboarding - they're a returning user)
               if (mounted) {
-                context.go(AppRoutes.onboarding);
+                context.go(AppRoutes.login);
               }
             },
             child: Text(
