@@ -10,7 +10,7 @@ class ApiService {
   final CognitoAuthDatasource _authDatasource;
   
   // API Gateway base URL
-  static const String _baseUrl = 'https://y1mheifune.execute-api.us-east-1.amazonaws.com/prod';
+  static const String _baseUrl = 'https://qeia3tvvg7.execute-api.us-east-1.amazonaws.com/prod';
 
   ApiService({
     FlutterSecureStorage? secureStorage,

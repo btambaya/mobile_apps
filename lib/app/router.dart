@@ -8,6 +8,8 @@ import '../features/auth/presentation/pages/register_page.dart';
 import '../features/auth/presentation/pages/verify_otp_page.dart';
 import '../features/auth/presentation/pages/forgot_password_page.dart';
 import '../features/auth/presentation/pages/passcode_setup_page.dart';
+import '../features/auth/presentation/pages/facial_verification_page.dart';
+import '../features/auth/domain/entities/auth_user.dart';
 
 // KYC feature imports
 import '../features/kyc/presentation/pages/kyc_start_page.dart';
@@ -58,6 +60,7 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String verifyOtp = '/verify-otp';
   static const String passcodeSetup = '/passcode-setup';
+  static const String facialVerification = '/facial-verification';
 
   // KYC routes
   static const String kycStart = '/kyc';
@@ -130,6 +133,13 @@ class AppRouter {
         builder: (context, state) => PasscodeSetupPage(
           onPasscodeSet: () => context.go(AppRoutes.home),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.facialVerification,
+        builder: (context, state) {
+          final user = state.extra as AuthUser;
+          return FacialVerificationPage(user: user);
+        },
       ),
 
       // ============ KYC Routes ============

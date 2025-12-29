@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
+import '../../../../core/services/device_service.dart';
 
 /// Devices page - Manage logged in devices
 class SecurityPage extends StatefulWidget {
@@ -12,30 +13,45 @@ class SecurityPage extends StatefulWidget {
 }
 
 class _SecurityPageState extends State<SecurityPage> {
-  // Mock devices data - in production, fetch from device management API
-  final List<Map<String, dynamic>> _devices = [
-    {
-      'id': 'device_1',
-      'name': 'iPhone 15 Pro',
-      'location': 'Lagos, Nigeria',
-      'time': 'Now • Current session',
-      'isCurrentDevice': true,
-    },
-    {
-      'id': 'device_2',
-      'name': 'Chrome on MacBook',
-      'location': 'Lagos, Nigeria',
-      'time': 'Yesterday at 2:30 PM',
-      'isCurrentDevice': false,
-    },
-    {
-      'id': 'device_3',
-      'name': 'Safari on iPhone',
-      'location': 'Abuja, Nigeria',
-      'time': 'Dec 23, 2024',
-      'isCurrentDevice': false,
-    },
-  ];
+  final DeviceService _deviceService = DeviceService();
+  
+  List<DeviceInfo> _devices = [];
+  String? _currentDeviceId;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final currentId = await _deviceService.getDeviceId();
+      final devices = await _deviceService.getDevices();
+      
+      if (mounted) {
+        setState(() {
+          _currentDeviceId = currentId;
+          _devices = devices;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load devices';
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,12 +76,42 @@ class _SecurityPageState extends State<SecurityPage> {
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: _buildBody(isDark),
+    );
+  }
+
+  Widget _buildBody(bool isDark) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: ThryveColors.error, size: 48),
+            const SizedBox(height: 16),
+            Text(_error!, style: ThryveTypography.bodyMedium),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadDevices,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadDevices,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Description
+            // Info banner
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -93,32 +139,47 @@ class _SecurityPageState extends State<SecurityPage> {
             const SizedBox(height: 24),
 
             // Devices list
-            _buildSectionTitle('Active Devices', isDark),
-            _buildCard(isDark, [
-              for (int i = 0; i < _devices.length; i++) ...[
-                if (i > 0)
-                  Divider(height: 1, color: isDark ? ThryveColors.surfaceElevatedDark : ThryveColors.divider),
-                _buildDeviceItem(
-                  device: _devices[i]['name'],
-                  location: _devices[i]['location'],
-                  time: _devices[i]['time'],
-                  isCurrentDevice: _devices[i]['isCurrentDevice'],
-                  deviceId: _devices[i]['id'],
-                  isDark: isDark,
+            _buildSectionTitle('Active Devices (${_devices.length}/3)', isDark),
+            
+            if (_devices.isEmpty)
+              _buildCard(isDark, [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'No devices found',
+                      style: ThryveTypography.bodyMedium.copyWith(
+                        color: ThryveColors.textSecondary,
+                      ),
+                    ),
+                  ),
                 ),
-              ],
-            ]),
+              ])
+            else
+              _buildCard(isDark, [
+                for (int i = 0; i < _devices.length; i++) ...[
+                  if (i > 0)
+                    Divider(height: 1, color: isDark ? ThryveColors.surfaceElevatedDark : ThryveColors.divider),
+                  _buildDeviceItem(
+                    device: _devices[i],
+                    isCurrentDevice: _devices[i].deviceId == _currentDeviceId,
+                    isDark: isDark,
+                  ),
+                ],
+              ]),
+            
             const SizedBox(height: 16),
             
             // Log out all button
-            TextButton.icon(
-              onPressed: () => _showLogoutAllConfirmation(),
-              icon: const Icon(Icons.logout, color: ThryveColors.error, size: 20),
-              label: Text(
-                'Log out all other devices',
-                style: ThryveTypography.labelLarge.copyWith(color: ThryveColors.error),
+            if (_devices.length > 1)
+              TextButton.icon(
+                onPressed: () => _showLogoutAllConfirmation(),
+                icon: const Icon(Icons.logout, color: ThryveColors.error, size: 20),
+                label: Text(
+                  'Log out all other devices',
+                  style: ThryveTypography.labelLarge.copyWith(color: ThryveColors.error),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -151,13 +212,12 @@ class _SecurityPageState extends State<SecurityPage> {
   }
 
   Widget _buildDeviceItem({
-    required String device,
-    required String location,
-    required String time,
+    required DeviceInfo device,
     required bool isCurrentDevice,
-    required String deviceId,
     required bool isDark,
   }) {
+    final timeDisplay = _formatTime(device.lastLogin);
+    
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -171,7 +231,7 @@ class _SecurityPageState extends State<SecurityPage> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              device.contains('iPhone') ? Icons.phone_iphone : Icons.laptop_mac,
+              device.isIOS ? Icons.phone_iphone : Icons.phone_android,
               color: isCurrentDevice ? ThryveColors.success : ThryveColors.textSecondary,
               size: 20,
             ),
@@ -185,7 +245,7 @@ class _SecurityPageState extends State<SecurityPage> {
                   children: [
                     Flexible(
                       child: Text(
-                        device,
+                        device.deviceName,
                         style: ThryveTypography.titleSmall.copyWith(
                           color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
                         ),
@@ -209,7 +269,7 @@ class _SecurityPageState extends State<SecurityPage> {
                   ],
                 ),
                 Text(
-                  '$location • $time',
+                  '${device.location} • $timeDisplay',
                   style: ThryveTypography.bodySmall.copyWith(color: ThryveColors.textSecondary),
                 ),
               ],
@@ -218,7 +278,7 @@ class _SecurityPageState extends State<SecurityPage> {
           if (!isCurrentDevice)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: ThryveColors.error, size: 22),
-              onPressed: () => _showRemoveDeviceConfirmation(deviceId, device),
+              onPressed: () => _showRemoveDeviceConfirmation(device),
               tooltip: 'Remove device',
             ),
         ],
@@ -226,13 +286,33 @@ class _SecurityPageState extends State<SecurityPage> {
     );
   }
 
-  void _showRemoveDeviceConfirmation(String deviceId, String deviceName) {
+  String _formatTime(String isoTime) {
+    if (isoTime.isEmpty) return 'Unknown';
+    
+    try {
+      final dateTime = DateTime.parse(isoTime);
+      final now = DateTime.now();
+      final diff = now.difference(dateTime);
+      
+      if (diff.inMinutes < 5) return 'Now';
+      if (diff.inHours < 1) return '${diff.inMinutes} minutes ago';
+      if (diff.inDays < 1) return '${diff.inHours} hours ago';
+      if (diff.inDays == 1) return 'Yesterday';
+      if (diff.inDays < 7) return '${diff.inDays} days ago';
+      
+      return '${dateTime.month}/${dateTime.day}/${dateTime.year}';
+    } catch (e) {
+      return isoTime;
+    }
+  }
+
+  void _showRemoveDeviceConfirmation(DeviceInfo device) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Remove Device'),
-        content: Text('Remove "$deviceName" from your account? This will log out that device.'),
+        content: Text('Remove "${device.deviceName}" from your account? This will log out that device.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -242,17 +322,9 @@ class _SecurityPageState extends State<SecurityPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _devices.removeWhere((d) => d['id'] == deviceId);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$deviceName has been removed'),
-                  backgroundColor: ThryveColors.success,
-                ),
-              );
+              await _removeDevice(device.deviceId, device.deviceName);
             },
             child: const Text(
               'Remove',
@@ -262,6 +334,34 @@ class _SecurityPageState extends State<SecurityPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _removeDevice(String deviceId, String deviceName) async {
+    try {
+      await _deviceService.removeDevice(deviceId);
+      
+      if (mounted) {
+        setState(() {
+          _devices.removeWhere((d) => d.deviceId == deviceId);
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$deviceName has been removed'),
+            backgroundColor: ThryveColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove device: $e'),
+            backgroundColor: ThryveColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _showLogoutAllConfirmation() {
@@ -280,17 +380,9 @@ class _SecurityPageState extends State<SecurityPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _devices.removeWhere((d) => d['isCurrentDevice'] != true);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('All other devices have been logged out'),
-                  backgroundColor: ThryveColors.warning,
-                ),
-              );
+              await _logoutAllOtherDevices();
             },
             child: const Text(
               'Log Out All',
@@ -300,5 +392,30 @@ class _SecurityPageState extends State<SecurityPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _logoutAllOtherDevices() async {
+    final otherDevices = _devices.where((d) => d.deviceId != _currentDeviceId).toList();
+    int removed = 0;
+    
+    for (final device in otherDevices) {
+      try {
+        await _deviceService.removeDevice(device.deviceId);
+        removed++;
+      } catch (e) {
+        // Continue with next device
+      }
+    }
+    
+    if (mounted) {
+      await _loadDevices(); // Refresh list
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$removed device(s) have been logged out'),
+          backgroundColor: ThryveColors.warning,
+        ),
+      );
+    }
   }
 }

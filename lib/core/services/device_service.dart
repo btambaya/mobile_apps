@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'api_service.dart';
 
@@ -39,24 +40,42 @@ class DeviceService {
   }
 
   /// Register this device on login
-  /// Returns null on success, or list of user's devices if max limit reached
+  /// Returns registration result with isNewDevice flag for facial verification
   Future<DeviceRegistrationResult> registerDevice() async {
     try {
-      await _apiService.post('/user/devices', {
+      debugPrint('📱 [DeviceService] Registering device...');
+      debugPrint('📱 [DeviceService] Device ID: ${await getDeviceId()}');
+      debugPrint('📱 [DeviceService] Device Name: ${await getDeviceName()}');
+      
+      final response = await _apiService.post('/user/devices', {
         'device_id': await getDeviceId(),
         'device_name': await getDeviceName(),
         'platform': getPlatform(),
       });
 
-      return DeviceRegistrationResult(success: true, devices: []);
+      debugPrint('📱 [DeviceService] Response: $response');
+      
+      // Check if this is a new device (201 registered) or existing (200 updated)
+      final status = response['status'] ?? '';
+      final isNewDevice = status == 'registered';
+      
+      debugPrint('📱 [DeviceService] Status: $status, isNewDevice: $isNewDevice');
+      
+      return DeviceRegistrationResult(
+        success: true,
+        isNewDevice: isNewDevice,
+        devices: [],
+      );
     } catch (e) {
+      debugPrint('📱 [DeviceService] ERROR: $e');
+      
       // Check if it's a max devices error (409)
       if (e.toString().contains('409') || e.toString().contains('max_devices')) {
         // Parse the devices from error response
-        // In real implementation, extract devices from response
         final devices = await getDevices();
         return DeviceRegistrationResult(
           success: false,
+          isNewDevice: true, // It would be a new device if we could add it
           maxDevicesReached: true,
           devices: devices,
         );
@@ -75,6 +94,7 @@ class DeviceService {
         deviceId: d['device_id'] ?? '',
         deviceName: d['device_name'] ?? 'Unknown',
         platform: d['platform'] ?? 'unknown',
+        location: d['location'] ?? 'Unknown',
         lastLogin: d['last_login'] ?? '',
         createdAt: d['created_at'] ?? '',
       )).toList();
@@ -83,9 +103,55 @@ class DeviceService {
     }
   }
 
+  /// Check if current device is registered (not removed by another device)
+  /// Returns false if device was removed (e.g., after passcode change on another device)
+  Future<bool> isDeviceRegistered() async {
+    try {
+      final currentId = await getDeviceId();
+      final devices = await getDevices();
+      
+      final isRegistered = devices.any((d) => d.deviceId == currentId);
+      debugPrint('📱 [DeviceService] isDeviceRegistered: $isRegistered (current: $currentId)');
+      return isRegistered;
+    } catch (e) {
+      debugPrint('📱 [DeviceService] isDeviceRegistered error: $e');
+      // On error, assume registered to avoid blocking user
+      return true;
+    }
+  }
+
   /// Remove a device
   Future<void> removeDevice(String deviceId) async {
-    await _apiService.delete('/user/devices/$deviceId');
+    try {
+      debugPrint('📱 [DeviceService] Deleting device: $deviceId');
+      final result = await _apiService.delete('/user/devices/$deviceId');
+      debugPrint('📱 [DeviceService] Delete result: $result');
+    } catch (e) {
+      debugPrint('📱 [DeviceService] Delete ERROR: $e');
+      rethrow;
+    }
+  }
+  
+  /// Logout all other devices (keep current device only)
+  /// Called when passcode is changed to force re-auth on other devices
+  Future<void> logoutOtherDevices() async {
+    try {
+      final currentId = await getDeviceId();
+      final devices = await getDevices();
+      
+      for (final device in devices) {
+        if (device.deviceId != currentId) {
+          try {
+            await removeDevice(device.deviceId);
+            debugPrint('📱 [DeviceService] Removed device: ${device.deviceName}');
+          } catch (e) {
+            debugPrint('📱 [DeviceService] Failed to remove ${device.deviceName}: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('📱 [DeviceService] logoutOtherDevices error: $e');
+    }
   }
 
   /// Format iOS device model to human readable name
@@ -106,11 +172,13 @@ class DeviceService {
 /// Result of device registration attempt
 class DeviceRegistrationResult {
   final bool success;
+  final bool isNewDevice;
   final bool maxDevicesReached;
   final List<DeviceInfo> devices;
 
   DeviceRegistrationResult({
     required this.success,
+    this.isNewDevice = false,
     this.maxDevicesReached = false,
     required this.devices,
   });
@@ -121,6 +189,7 @@ class DeviceInfo {
   final String deviceId;
   final String deviceName;
   final String platform;
+  final String location;
   final String lastLogin;
   final String createdAt;
 
@@ -128,6 +197,7 @@ class DeviceInfo {
     required this.deviceId,
     required this.deviceName,
     required this.platform,
+    required this.location,
     required this.lastLogin,
     required this.createdAt,
   });

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'pin_service.dart';
+import 'device_service.dart';
 
 /// Session service for managing app lock and timeout
 /// When app goes to background or after inactivity, requires re-authentication
@@ -27,6 +29,7 @@ class SessionService extends WidgetsBindingObserver {
   bool _lockScreenVisible = false; // FIX 2: Track if lock screen is actually visible
   DateTime? _lastActiveTime;
   VoidCallback? _onLockRequired;
+  VoidCallback? _onDeviceInvalidated;
 
   /// Whether the app is currently locked
   bool get isLocked => _isLocked;
@@ -41,10 +44,14 @@ class SessionService extends WidgetsBindingObserver {
   bool get lockScreenVisible => _lockScreenVisible;
 
   /// Initialize the session service
-  void initialize({required VoidCallback onLockRequired}) async {
+  void initialize({
+    required VoidCallback onLockRequired,
+    VoidCallback? onDeviceInvalidated,
+  }) async {
     if (_isInitialized) return;
     
     _onLockRequired = onLockRequired;
+    _onDeviceInvalidated = onDeviceInvalidated;
     WidgetsBinding.instance.addObserver(this);
     _isInitialized = true;
     _lastActiveTime = DateTime.now();
@@ -52,9 +59,26 @@ class SessionService extends WidgetsBindingObserver {
     
     // Load logged-in state
     await _loadLoggedInState();
+    debugPrint('🔐 [SessionService] isLoggedIn: $_isLoggedIn');
+    
+    // If logged in, check if device is still registered
+    if (_isLoggedIn) {
+      debugPrint('🔐 [SessionService] Checking if device is registered...');
+      final isRegistered = await DeviceService().isDeviceRegistered();
+      debugPrint('🔐 [SessionService] isRegistered: $isRegistered');
+      if (!isRegistered) {
+        // Device was removed (e.g., passcode changed on another device)
+        // Force full re-login - clear all auth state
+        debugPrint('🔐 [SessionService] Device not registered! Forcing logout...');
+        await fullLogout();
+        _onDeviceInvalidated?.call();
+        return;
+      }
+    }
     
     // Check if user is logged in AND has passcode - if so, lock on app start
     final hasPasscode = await _pinService.isPinEnabled();
+    debugPrint('🔐 [SessionService] hasPasscode: $hasPasscode');
     if (_isLoggedIn && hasPasscode) {
       lock();
     }
@@ -127,6 +151,19 @@ class SessionService extends WidgetsBindingObserver {
     _lockScreenVisible = false;
     await _secureStorage.write(key: _isLoggedInKey, value: 'false');
   }
+  
+  /// Full logout - clear everything including Cognito session
+  /// Used when device is invalidated
+  Future<void> fullLogout() async {
+    await logout();
+    // Clear Cognito tokens
+    await _secureStorage.delete(key: 'cognito_id_token');
+    await _secureStorage.delete(key: 'cognito_access_token');
+    await _secureStorage.delete(key: 'cognito_refresh_token');
+    // Clear PIN
+    await _pinService.removePin();
+    debugPrint('🔐 [SessionService] Full logout complete');
+  }
 
   /// Handle app lifecycle changes
   @override
@@ -138,13 +175,23 @@ class SessionService extends WidgetsBindingObserver {
         _saveLastActiveTime();
         break;
       case AppLifecycleState.resumed:
-        // App returning to foreground - check if should lock
-        // FIX 2: Also check _lockScreenVisible to prevent redundant rebuilds
+        // App returning to foreground
         if (_isLoggedIn && 
             !_isInSignupFlow && 
             !_isLocked && 
-            !_lockScreenVisible &&  // FIX 2: Don't lock if already showing
+            !_lockScreenVisible &&
             !_isBiometricAuthInProgress) {
+          
+          // Check if device is still registered before showing lock
+          final isRegistered = await DeviceService().isDeviceRegistered();
+          if (!isRegistered) {
+            // Device was removed - force logout
+            debugPrint('🔐 [SessionService] Device removed while in background! Forcing logout...');
+            await fullLogout();
+            _onDeviceInvalidated?.call();
+            return;
+          }
+          
           final hasPasscode = await _pinService.isPinEnabled();
           if (hasPasscode) {
             lock();

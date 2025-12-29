@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../../features/auth/data/datasources/cognito_auth_datasource.dart';
+import 'device_service.dart';
 
 /// Service for managing app PIN (4-6 digit passcode)
 /// PIN is stored securely locally AND synced to Cognito for cross-device access
@@ -25,6 +26,7 @@ class PinService {
 
   /// Set up new PIN (hashed for security)
   /// Saves to both local storage AND Cognito for cross-device sync
+  /// Also logs out all other devices to force re-auth with new passcode
   Future<void> setPin(String pin) async {
     if (pin.length < 4 || pin.length > 6) {
       throw Exception('PIN must be 4-6 digits');
@@ -41,6 +43,13 @@ class PinService {
       await _cognitoDatasource.savePasscodeHash(hash);
     } catch (e) {
       debugPrint('Failed to sync passcode to Cognito: $e');
+    }
+    
+    // Logout all other devices to force re-auth with new passcode
+    try {
+      await DeviceService().logoutOtherDevices();
+    } catch (e) {
+      debugPrint('Failed to logout other devices: $e');
     }
   }
 

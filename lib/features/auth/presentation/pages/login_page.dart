@@ -7,7 +7,9 @@ import '../../../../app/theme/colors.dart';
 import '../../../../app/theme/typography.dart';
 import '../../../../core/services/biometric_auth_service.dart';
 import '../../../../core/services/session_service.dart';
+import '../../../../core/services/device_service.dart';
 import '../../data/repositories/auth_repository_impl.dart';
+import '../../domain/entities/auth_user.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -91,6 +93,151 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _showDevicePickerDialog(BuildContext context, AuthUser user, List<dynamic> devices) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool isRemoving = false;
+        String? selectedDeviceId;
+        
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Icon(Icons.devices, color: ThryveColors.warning),
+                  const SizedBox(width: 12),
+                  const Text('Max Devices'),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You have 3 devices. Remove one to continue.',
+                      style: ThryveTypography.bodyMedium.copyWith(
+                        color: ThryveColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...devices.map((device) {
+                      final deviceId = device is DeviceInfo 
+                          ? device.deviceId 
+                          : (device['device_id'] ?? '');
+                      final deviceName = device is DeviceInfo 
+                          ? device.deviceName 
+                          : (device['device_name'] ?? 'Unknown Device');
+                      final isSelected = selectedDeviceId == deviceId;
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          setDialogState(() => selectedDeviceId = deviceId);
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                                ? ThryveColors.error.withValues(alpha: 0.1) 
+                                : (isDark ? ThryveColors.surfaceElevatedDark : ThryveColors.surface),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? ThryveColors.error : ThryveColors.divider,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.phone_android,
+                                color: isSelected ? ThryveColors.error : ThryveColors.textSecondary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  deviceName,
+                                  style: ThryveTypography.bodyMedium.copyWith(
+                                    color: isSelected ? ThryveColors.error : null,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                Icon(Icons.check_circle, color: ThryveColors.error),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedDeviceId == null || isRemoving 
+                      ? null 
+                      : () async {
+                          setDialogState(() => isRemoving = true);
+                          
+                          try {
+                            await DeviceService().removeDevice(selectedDeviceId!);
+                            
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                              
+                              // Retry login
+                              if (context.mounted) {
+                                context.read<AuthBloc>().add(
+                                  AuthSignInRequested(
+                                    email: _emailController.text.trim(),
+                                    password: _passwordController.text,
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            setDialogState(() => isRemoving = false);
+                            if (dialogContext.mounted) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to remove device: $e'),
+                                  backgroundColor: ThryveColors.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThryveColors.error,
+                  ),
+                  child: isRemoving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Remove & Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -108,6 +255,16 @@ class _LoginPageState extends State<LoginPage> {
             // First login - mark as logged in, need to set up passcode
             await SessionService().setLoggedIn(true);
             if (context.mounted) context.go(AppRoutes.passcodeSetup);
+          } else if (state is AuthNeedsFacialVerification) {
+            // New device - require facial verification
+            if (context.mounted) {
+              context.go(AppRoutes.facialVerification, extra: state.user);
+            }
+          } else if (state is AuthMaxDevicesReached) {
+            // Show device picker dialog
+            if (context.mounted) {
+              _showDevicePickerDialog(context, state.user, state.devices);
+            }
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

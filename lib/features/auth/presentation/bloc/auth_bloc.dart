@@ -2,7 +2,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../domain/entities/auth_user.dart';
 import '../../../../core/services/pin_service.dart';
+import '../../../../core/services/device_service.dart';
 import '../../../../core/utils/auth_error_helper.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -107,25 +109,46 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
       
-      // Check if passcode is set up locally
-      final pinService = PinService();
-      var hasPasscode = await pinService.isPinEnabled();
+      // Register this device
+      final deviceService = DeviceService();
+      final deviceResult = await deviceService.registerDevice();
       
-      // If no local passcode, try to sync from Cognito (cross-device login)
-      if (!hasPasscode) {
-        final synced = await pinService.syncFromCloud();
-        hasPasscode = synced;
+      // Check if max devices reached
+      if (deviceResult.maxDevicesReached) {
+        emit(AuthMaxDevicesReached(user, deviceResult.devices));
+        return;
       }
       
-      if (hasPasscode) {
-        emit(AuthAuthenticated(user));
-      } else {
-        emit(AuthNeedsPasscodeSetup(user));
+      // New device requires facial verification
+      if (deviceResult.isNewDevice) {
+        emit(AuthNeedsFacialVerification(user));
+        return;
       }
+      
+      // Existing device - proceed to passcode check
+      await _proceedToPasscodeCheck(user, emit);
     } on CognitoClientException catch (e) {
       emit(AuthError(_parseError(e)));
     } catch (e) {
       emit(AuthError(e.toString()));
+    }
+  }
+  
+  /// Helper to check passcode and emit appropriate state
+  Future<void> _proceedToPasscodeCheck(AuthUser user, Emitter<AuthState> emit) async {
+    final pinService = PinService();
+    var hasPasscode = await pinService.isPinEnabled();
+    
+    // If no local passcode, try to sync from Cognito (cross-device login)
+    if (!hasPasscode) {
+      final synced = await pinService.syncFromCloud();
+      hasPasscode = synced;
+    }
+    
+    if (hasPasscode) {
+      emit(AuthAuthenticated(user));
+    } else {
+      emit(AuthNeedsPasscodeSetup(user));
     }
   }
 

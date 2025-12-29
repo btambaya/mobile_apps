@@ -37,6 +37,13 @@ class _ThryveAppState extends State<ThryveApp> {
           setState(() => _showLockScreen = true);
         }
       },
+      onDeviceInvalidated: () {
+        // Device was removed (e.g., passcode changed on another device)
+        // Navigate to login page
+        if (mounted) {
+          AppRouter.router.go(AppRoutes.login);
+        }
+      },
     );
   }
 

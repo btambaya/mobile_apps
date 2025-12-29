@@ -89,3 +89,23 @@ class AuthError extends AuthState {
   List<Object?> get props => [message];
 }
 
+/// Max devices reached - user needs to remove a device to continue
+class AuthMaxDevicesReached extends AuthState {
+  final AuthUser user;
+  final List<dynamic> devices;
+
+  const AuthMaxDevicesReached(this.user, this.devices);
+
+  @override
+  List<Object?> get props => [user, devices];
+}
+
+/// New device requires facial verification before login completes
+class AuthNeedsFacialVerification extends AuthState {
+  final AuthUser user;
+
+  const AuthNeedsFacialVerification(this.user);
+
+  @override
+  List<Object?> get props => [user];
+}

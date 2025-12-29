@@ -61,6 +61,13 @@ class _SplashPageState extends State<SplashPage>
         // RETURNING LOGGED-IN USER - show brief splash then lock screen
         _controller.forward();
         await Future.delayed(const Duration(milliseconds: 600));
+        
+        // Re-check isLoggedIn in case device was invalidated during delay
+        if (!sessionService.isLoggedIn) {
+          if (mounted) context.go(AppRoutes.login);
+          return;
+        }
+        
         if (mounted) context.go(AppRoutes.home);
         return;
       }
@@ -85,6 +92,13 @@ class _SplashPageState extends State<SplashPage>
           // Has session and passcode - go to home (lock screen will show)
           _controller.forward();
           await Future.delayed(const Duration(milliseconds: 600));
+          
+          // Re-check in case device was invalidated
+          if (!sessionService.isLoggedIn) {
+            if (mounted) context.go(AppRoutes.login);
+            return;
+          }
+          
           if (mounted) context.go(AppRoutes.home);
         }
       } else {
