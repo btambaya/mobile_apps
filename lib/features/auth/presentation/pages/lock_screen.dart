@@ -11,8 +11,13 @@ import '../../data/datasources/cognito_auth_datasource.dart';
 /// Lock screen - requires passcode or biometric to unlock
 class LockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
+  final VoidCallback? onForgotPasscode;
   
-  const LockScreen({super.key, required this.onUnlocked});
+  const LockScreen({
+    super.key,
+    required this.onUnlocked,
+    this.onForgotPasscode,
+  });
 
   @override
   State<LockScreen> createState() => _LockScreenState();
@@ -196,149 +201,131 @@ class _LockScreenState extends State<LockScreen> {
     bool isVerifying = false;
     String? verifyError;
 
-    showModalBottomSheet(
+    // Use showDialog instead of showModalBottomSheet since LockScreen
+    // is rendered in a Stack overlay without Navigator context
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+      barrierDismissible: true,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
           
-          return Container(
-            decoration: BoxDecoration(
-              color: isDark ? ThryveColors.surfaceDark : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: isDark ? ThryveColors.surfaceDark : Colors.white,
+            title: Text(
+              'Reset Passcode',
+              style: ThryveTypography.headlineSmall.copyWith(
+                color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+              ),
             ),
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: ThryveColors.divider,
-                      borderRadius: BorderRadius.circular(2),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enter your account credentials to verify your identity.',
+                    style: ThryveTypography.bodyMedium.copyWith(
+                      color: ThryveColors.textSecondary,
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                
-                Text(
-                  'Reset Passcode',
-                  style: ThryveTypography.headlineSmall.copyWith(
-                    color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                  const SizedBox(height: 24),
+                  
+                  // Email field
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Password field
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      errorText: verifyError,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isVerifying ? null : () async {
+                  final email = emailController.text.trim();
+                  final password = passwordController.text;
+                  
+                  if (email.isEmpty || password.isEmpty) {
+                    setDialogState(() {
+                      verifyError = 'Please enter both email and password';
+                    });
+                    return;
+                  }
+                  
+                  setDialogState(() {
+                    isVerifying = true;
+                    verifyError = null;
+                  });
+                  
+                  try {
+                    // Verify password by attempting to sign in with Cognito
+                    final cognitoDatasource = CognitoAuthDatasource();
+                    await cognitoDatasource.signIn(
+                      email: email,
+                      password: password,
+                    );
+                    
+                    // Password verified! Remove the passcode
+                    await _pinService.removePin();
+                    
+                    // Also disable biometric since passcode is removed
+                    await BiometricAuthService().setBiometricEnabled(false);
+                    
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                      _showNewPasscodeSetup();
+                    }
+                  } catch (e) {
+                    setDialogState(() {
+                      isVerifying = false;
+                      verifyError = AuthErrorHelper.getErrorMessage(e);
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ThryveColors.accent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your account credentials to verify your identity.',
-                  style: ThryveTypography.bodyMedium.copyWith(
-                    color: ThryveColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Email field
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Password field
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    filled: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    errorText: verifyError,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: isVerifying ? null : () async {
-                      final email = emailController.text.trim();
-                      final password = passwordController.text;
-                      
-                      if (email.isEmpty || password.isEmpty) {
-                        setSheetState(() {
-                          verifyError = 'Please enter both email and password';
-                        });
-                        return;
-                      }
-                      
-                      setSheetState(() {
-                        isVerifying = true;
-                        verifyError = null;
-                      });
-                      
-                      try {
-                        // Verify password by attempting to sign in with Cognito
-                        final cognitoDatasource = CognitoAuthDatasource();
-                        await cognitoDatasource.signIn(
-                          email: email,
-                          password: password,
-                        );
-                        
-                        // Password verified! Remove the passcode
-                        await _pinService.removePin();
-                        
-                        // Also disable biometric since passcode is removed
-                        await BiometricAuthService().setBiometricEnabled(false);
-                        
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext);
-                          _showNewPasscodeSetup();
-                        }
-                      } catch (e) {
-                        setSheetState(() {
-                          isVerifying = false;
-                          verifyError = AuthErrorHelper.getErrorMessage(e);
-                        });
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThryveColors.accent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                child: isVerifying
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        'Verify & Reset',
+                        style: ThryveTypography.button.copyWith(color: Colors.white),
                       ),
-                    ),
-                    child: isVerifying
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            'Verify & Reset',
-                            style: ThryveTypography.button.copyWith(color: Colors.white),
-                          ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
@@ -351,134 +338,136 @@ class _LockScreenState extends State<LockScreen> {
     bool isConfirming = false;
     String? error;
 
-    showModalBottomSheet(
+    // Use showDialog instead of showModalBottomSheet since LockScreen
+    // is rendered in a Stack overlay without Navigator context
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
           final currentPin = isConfirming ? confirmPin : newPin;
           
-          return Container(
-            height: MediaQuery.of(sheetContext).size.height * 0.85,
-            decoration: BoxDecoration(
-              color: isDark ? ThryveColors.surfaceDark : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                
-                Text(
-                  isConfirming ? 'Confirm Passcode' : 'Create New Passcode',
-                  style: ThryveTypography.headlineMedium.copyWith(
-                    color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isConfirming ? 'Enter the same passcode' : 'Choose a 4-digit passcode',
-                  style: ThryveTypography.bodyMedium.copyWith(
-                    color: ThryveColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                
-                // Dots
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (i) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i < currentPin.length ? ThryveColors.accent : Colors.transparent,
-                      border: Border.all(
-                        color: i < currentPin.length ? ThryveColors.accent : ThryveColors.divider,
-                        width: 2,
-                      ),
+          return Dialog(
+            backgroundColor: isDark ? ThryveColors.surfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(dialogContext).size.height * 0.75,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 20),
+                  
+                  Text(
+                    isConfirming ? 'Confirm Passcode' : 'Create New Passcode',
+                    style: ThryveTypography.headlineMedium.copyWith(
+                      color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
                     ),
-                  )),
-                ),
-                
-                if (error != null) ...[
-                  const SizedBox(height: 16),
-                  Text(error!, style: ThryveTypography.bodySmall.copyWith(color: ThryveColors.error)),
-                ],
-                
-                const Spacer(),
-                
-                // Keypad
-                ...['123', '456', '789', ' 0⌫'].map((row) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Row(
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isConfirming ? 'Enter the same passcode' : 'Choose a 4-digit passcode',
+                    style: ThryveTypography.bodyMedium.copyWith(
+                      color: ThryveColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Dots
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: row.split('').map((key) {
-                      if (key == ' ') return const SizedBox(width: 80);
-                      return GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setSheetState(() {
-                            error = null;
-                            if (key == '⌫') {
-                              if (isConfirming && confirmPin.isNotEmpty) {
-                                confirmPin = confirmPin.substring(0, confirmPin.length - 1);
-                              } else if (!isConfirming && newPin.isNotEmpty) {
-                                newPin = newPin.substring(0, newPin.length - 1);
-                              }
-                            } else {
-                              if (isConfirming && confirmPin.length < 4) {
-                                confirmPin += key;
-                                if (confirmPin.length == 4) {
-                                  if (confirmPin == newPin) {
-                                    _pinService.setPin(newPin).then((_) async {
-                                      Navigator.pop(sheetContext);
-                                      // Show biometric prompt before unlocking
-                                      await _showBiometricEnrollmentPrompt();
-                                      _unlock();
-                                    });
-                                  } else {
-                                    error = 'Passcodes don\'t match';
-                                    confirmPin = '';
+                    children: List.generate(4, (i) => Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i < currentPin.length ? ThryveColors.accent : Colors.transparent,
+                        border: Border.all(
+                          color: i < currentPin.length ? ThryveColors.accent : ThryveColors.divider,
+                          width: 2,
+                        ),
+                      ),
+                    )),
+                  ),
+                  
+                  if (error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(error!, style: ThryveTypography.bodySmall.copyWith(color: ThryveColors.error)),
+                  ],
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Keypad
+                  ...['123', '456', '789', ' 0⌫'].map((row) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: row.split('').map((key) {
+                        if (key == ' ') return const SizedBox(width: 64);
+                        return GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            setDialogState(() {
+                              error = null;
+                              if (key == '⌫') {
+                                if (isConfirming && confirmPin.isNotEmpty) {
+                                  confirmPin = confirmPin.substring(0, confirmPin.length - 1);
+                                } else if (!isConfirming && newPin.isNotEmpty) {
+                                  newPin = newPin.substring(0, newPin.length - 1);
+                                }
+                              } else {
+                                if (isConfirming && confirmPin.length < 4) {
+                                  confirmPin += key;
+                                  if (confirmPin.length == 4) {
+                                    if (confirmPin == newPin) {
+                                      _pinService.setPin(newPin).then((_) async {
+                                        Navigator.pop(dialogContext);
+                                        // Show biometric prompt before unlocking
+                                        await _showBiometricEnrollmentPrompt();
+                                        _unlock();
+                                      });
+                                    } else {
+                                      error = 'Passcodes don\'t match';
+                                      confirmPin = '';
+                                    }
+                                  }
+                                } else if (!isConfirming && newPin.length < 4) {
+                                  newPin += key;
+                                  if (newPin.length == 4) {
+                                    isConfirming = true;
                                   }
                                 }
-                              } else if (!isConfirming && newPin.length < 4) {
-                                newPin += key;
-                                if (newPin.length == 4) {
-                                  isConfirming = true;
-                                }
                               }
-                            }
-                          });
-                        },
-                        child: Container(
-                          width: 80,
-                          height: 60,
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: key == '⌫' ? Colors.transparent : (isDark ? ThryveColors.backgroundDark : ThryveColors.surface),
-                            borderRadius: BorderRadius.circular(12),
+                            });
+                          },
+                          child: Container(
+                            width: 64,
+                            height: 48,
+                            margin: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: BoxDecoration(
+                              color: key == '⌫' ? Colors.transparent : (isDark ? ThryveColors.backgroundDark : ThryveColors.surface),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: key == '⌫'
+                                  ? Icon(Icons.backspace_outlined, color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary)
+                                  : Text(key, style: ThryveTypography.headlineSmall.copyWith(
+                                      color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
+                                    )),
+                            ),
                           ),
-                          child: Center(
-                            child: key == '⌫'
-                                ? Icon(Icons.backspace_outlined, color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary)
-                                : Text(key, style: ThryveTypography.headlineMedium.copyWith(
-                                    color: isDark ? ThryveColors.textPrimaryDark : ThryveColors.textPrimary,
-                                  )),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                )),
-                
-                const SizedBox(height: 20),
-              ],
+                        );
+                      }).toList(),
+                    ),
+                  )),
+                  
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           );
         },
@@ -583,7 +572,7 @@ class _LockScreenState extends State<LockScreen> {
               
               // Forgot passcode
               TextButton(
-                onPressed: _showForgotPasscodeSheet,
+                onPressed: widget.onForgotPasscode ?? _showForgotPasscodeSheet,
                 child: Text(
                   'Forgot Passcode?',
                   style: ThryveTypography.labelLarge.copyWith(
